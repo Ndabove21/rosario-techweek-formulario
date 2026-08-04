@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background: #0a0a0a;
+  color: #fafafa;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* placeholders y selects coherentes con el dark */
+input::placeholder,
+textarea::placeholder {
+  color: #52525b;
+}
+
+select option {
+  background: #0a0a0a;
+  color: #fafafa;
+}
