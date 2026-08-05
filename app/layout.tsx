@@ -7,7 +7,7 @@ const inter = Inter({ subsets: ["latin"], display: "swap" });
 export const metadata: Metadata = {
   title: "Sumate — Rosario Tech Week 2026",
   description:
-    "Sumá tu evento, ofrecé tu venue o postulate como speaker de la Rosario Tech Week 2026. Es tiempo de acelerar.",
+    "Sumá tu evento u ofrecé tu venue para la Rosario Tech Week 2026. Es tiempo de acelerar.",
   metadataBase: new URL("https://eventos.rosariotechweek.com"),
   openGraph: {
     title: "Sumate — Rosario Tech Week 2026",

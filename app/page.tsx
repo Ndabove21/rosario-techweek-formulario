@@ -3,20 +3,17 @@
 import { useState } from "react";
 import {
   FORMATOS, PILARES, NECESITA_VENUE, COSTOS, DIAS, BLOQUES, TEMATICAS,
-  eventoSchema, venueSchema, speakerSchema,
+  DIAS_VENUE, FRANJAS, FINANCIAMIENTO, NECESIDADES, submissionSchema,
 } from "@/lib/schemas";
 
-type Via = "evento" | "venue" | "speaker";
+type Via = "evento" | "venue";
 type Status = "idle" | "sending" | "ok" | "error";
 type Errors = Record<string, string>;
 
 const CARDS: { via: Via; n: string; titulo: string; desc: string }[] = [
-  { via: "evento", n: "01", titulo: "Sumar evento", desc: "Agregá tu propio evento al calendario oficial de la TechWeek." },
+  { via: "evento", n: "01", titulo: "Sumar evento", desc: "Proponé tu evento —con speakers, temática y propuesta— para el calendario oficial." },
   { via: "venue", n: "02", titulo: "Ofrecer venue", desc: "Abrí las puertas de tu espacio y recibí un evento de la semana." },
-  { via: "speaker", n: "03", titulo: "Ser speaker", desc: "Compartí tu conocimiento con la comunidad en charlas y paneles." },
 ];
-
-const SCHEMAS = { evento: eventoSchema, venue: venueSchema, speaker: speakerSchema };
 
 const inputCls =
   "w-full rounded-lg border border-white/12 bg-white/[0.03] px-3.5 py-2.5 text-[15px] text-neutral-100 outline-none transition-colors focus:border-white/40 focus:bg-white/[0.05]";
@@ -109,6 +106,8 @@ export default function Page() {
   const [errors, setErrors] = useState<Errors>({});
   const [f, setF] = useState<Record<string, string>>({});
   const [tematicas, setTematicas] = useState<string[]>([]);
+  const [diasVenue, setDiasVenue] = useState<string[]>([]);
+  const [necesidades, setNecesidades] = useState<string[]>([]);
   const [noSoyBot, setNoSoyBot] = useState(false);
   const [website, setWebsite] = useState(""); // honeypot
 
@@ -117,9 +116,11 @@ export default function Page() {
     if (errors[k]) setErrors((e) => ({ ...e, [k]: "" }));
   };
   const toggleTema = (t: string) => setTematicas((s) => (s.includes(t) ? s.filter((x) => x !== t) : [...s, t]));
+  const toggleDia = (t: string) => setDiasVenue((s) => (s.includes(t) ? s.filter((x) => x !== t) : [...s, t]));
+  const toggleNecesidad = (t: string) => setNecesidades((s) => (s.includes(t) ? s.filter((x) => x !== t) : [...s, t]));
 
   function choose(v: Via) {
-    setF({}); setTematicas([]); setErrors({}); setNoSoyBot(false); setWebsite(""); setServerError("");
+    setF({}); setTematicas([]); setDiasVenue([]); setNecesidades([]); setErrors({}); setNoSoyBot(false); setWebsite(""); setServerError("");
     setStatus("idle"); setVia(v);
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -129,18 +130,19 @@ export default function Page() {
     if (v === "evento") return { ...base, evento: f.evento, formato: f.formato, pilar: f.pilar,
       descripcion: f.descripcion, publicoObjetivo: f.publicoObjetivo, necesitaVenue: f.necesitaVenue,
       capacidad: f.capacidad, costo: f.costo, dia: f.dia, bloque: f.bloque, proponente: f.proponente,
-      email: f.email, whatsapp: f.whatsapp, organizacion: f.organizacion ?? "", webLinkedin: f.webLinkedin ?? "" };
-    if (v === "venue") return { ...base, espacio: f.espacio, direccion: f.direccion, capacidad: f.capacidad,
+      email: f.email, whatsapp: f.whatsapp, organizacion: f.organizacion ?? "", webLinkedin: f.webLinkedin ?? "",
+      tematicas, speakers: f.speakers, propuestaValor: f.propuestaValor,
+      financiamiento: f.financiamiento, necesidades };
+    return { ...base, espacio: f.espacio, direccion: f.direccion, capacidad: f.capacidad,
       costoDia: f.costoDia ? f.costoDia : undefined, equipamiento: f.equipamiento ?? "", contacto: f.contacto,
-      email: f.email, telefono: f.telefono };
-    return { ...base, nombre: f.nombre, rol: f.rol, organizacionRepresenta: f.organizacionRepresenta ?? "",
-      bio: f.bio, tematicas, email: f.email, telefono: f.telefono ?? "", linkedin: f.linkedin ?? "" };
+      email: f.email, telefono: f.telefono, dias: diasVenue, franja: f.franja,
+      franjaDesde: f.franjaDesde ?? "", franjaHasta: f.franjaHasta ?? "" };
   }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!via) return;
-    const parsed = SCHEMAS[via].safeParse(buildPayload(via));
+    const parsed = submissionSchema.safeParse(buildPayload(via));
     if (!parsed.success) {
       const errs: Errors = {};
       for (const issue of parsed.error.errors) {
@@ -206,11 +208,11 @@ export default function Page() {
               ← Volver
             </button>
 
-            {via === "evento" && <EventoFields f={f} set={set} errors={errors} />}
-            {via === "venue" && <VenueFields f={f} set={set} errors={errors} />}
-            {via === "speaker" && (
-              <SpeakerFields f={f} set={set} errors={errors} tematicas={tematicas} toggleTema={toggleTema} />
+            {via === "evento" && (
+              <EventoFields f={f} set={set} errors={errors} tematicas={tematicas} toggleTema={toggleTema}
+                necesidades={necesidades} toggleNecesidad={toggleNecesidad} />
             )}
+            {via === "venue" && <VenueFields f={f} set={set} errors={errors} dias={diasVenue} toggleDia={toggleDia} />}
 
             {/* honeypot: invisible para humanos */}
             <input type="text" name="website" value={website} onChange={(e) => setWebsite(e.target.value)}
@@ -263,7 +265,9 @@ function Success() {
 // ── Los 3 caminos ──────────────────────────────────────────────────────────
 type FieldsProps = { f: Record<string, string>; set: (k: string) => (v: string) => void; errors: Errors };
 
-function EventoFields({ f, set, errors }: FieldsProps) {
+function EventoFields({ f, set, errors, tematicas, toggleTema, necesidades, toggleNecesidad }: FieldsProps & {
+  tematicas: string[]; toggleTema: (v: string) => void; necesidades: string[]; toggleNecesidad: (v: string) => void;
+}) {
   return (
     <>
       <Eyebrow n="01">El evento</Eyebrow>
@@ -274,18 +278,30 @@ function EventoFields({ f, set, errors }: FieldsProps) {
           <Sel label="Pilar" val={f.pilar} on={set("pilar")} options={PILARES} err={errors.pilar} req />
         </div>
         <Area label="Descripción (mín. 100 palabras)" val={f.descripcion} on={set("descripcion")} err={errors.descripcion} req rows={6}
-          ph="Contá de qué se trata, qué se lleva la gente, dinámica, invitados…" />
+          ph="Contá de qué se trata, qué se lleva la gente, dinámica…" />
         <Text label="Público objetivo" val={f.publicoObjetivo} on={set("publicoObjetivo")} err={errors.publicoObjetivo} req ph="Ej: founders early-stage, devs, estudiantes" />
       </div>
 
       <div className="my-10 h-px bg-white/10" />
-      <Eyebrow n="02">Logística</Eyebrow>
+      <Eyebrow n="02">Contenido y speakers</Eyebrow>
       <div className="grid gap-5">
-        <Sel label="¿Necesita venue?" val={f.necesitaVenue} on={set("necesitaVenue")} options={NECESITA_VENUE} err={errors.necesitaVenue} req />
+        <Chips label="Temáticas que toca el evento" values={tematicas} options={TEMATICAS} onToggle={toggleTema} err={errors.tematicas} req />
+        <Area label="Speakers que proponés" val={f.speakers} on={set("speakers")} err={errors.speakers} req rows={3}
+          ph="Nombre y de qué habla cada uno. Ej: Juana Pérez — IA aplicada a pymes." />
+        <Area label="Propuesta de valor del evento" val={f.propuestaValor} on={set("propuestaValor")} err={errors.propuestaValor} req rows={3}
+          ph="¿Por qué vale la pena? ¿Qué lo hace único?" />
+      </div>
+
+      <div className="my-10 h-px bg-white/10" />
+      <Eyebrow n="03">Logística y montaje</Eyebrow>
+      <div className="grid gap-5">
+        <Sel label="¿Tenés dónde hacerlo?" val={f.necesitaVenue} on={set("necesitaVenue")} options={NECESITA_VENUE} err={errors.necesitaVenue} req />
         <div className="grid gap-5 sm:grid-cols-2">
-          <Text label="Capacidad estimada" val={f.capacidad} on={set("capacidad")} err={errors.capacidad} req type="number" ph="80" />
+          <Text label="¿Cuántas personas proyectás? (lo más real posible)" val={f.capacidad} on={set("capacidad")} err={errors.capacidad} req type="number" ph="80" />
           <Sel label="Costo para el asistente" val={f.costo} on={set("costo")} options={COSTOS} err={errors.costo} req />
         </div>
+        <Chips label="¿Qué necesitás para el montaje?" values={necesidades} options={NECESIDADES} onToggle={toggleNecesidad} err={errors.necesidades} req />
+        <Sel label="¿Cómo se financia el evento?" val={f.financiamiento} on={set("financiamiento")} options={FINANCIAMIENTO} err={errors.financiamiento} req />
         <div className="grid gap-5 sm:grid-cols-2">
           <Sel label="Día preferido" val={f.dia} on={set("dia")} options={DIAS} err={errors.dia} req />
           <Sel label="Bloque preferido" val={f.bloque} on={set("bloque")} options={BLOQUES} err={errors.bloque} req />
@@ -293,7 +309,7 @@ function EventoFields({ f, set, errors }: FieldsProps) {
       </div>
 
       <div className="my-10 h-px bg-white/10" />
-      <Eyebrow n="03">Quién propone</Eyebrow>
+      <Eyebrow n="04">Quién propone</Eyebrow>
       <div className="grid gap-5">
         <div className="grid gap-5 sm:grid-cols-2">
           <Text label="Nombre del proponente" val={f.proponente} on={set("proponente")} err={errors.proponente} req />
@@ -309,7 +325,7 @@ function EventoFields({ f, set, errors }: FieldsProps) {
   );
 }
 
-function VenueFields({ f, set, errors }: FieldsProps) {
+function VenueFields({ f, set, errors, dias, toggleDia }: FieldsProps & { dias: string[]; toggleDia: (v: string) => void }) {
   return (
     <>
       <Eyebrow n="01">El espacio</Eyebrow>
@@ -324,7 +340,20 @@ function VenueFields({ f, set, errors }: FieldsProps) {
       </div>
 
       <div className="my-10 h-px bg-white/10" />
-      <Eyebrow n="02">Contacto</Eyebrow>
+      <Eyebrow n="02">Disponibilidad</Eyebrow>
+      <div className="grid gap-5">
+        <Chips label="¿Qué días podés prestar el espacio? (19 al 24/10)" values={dias} options={DIAS_VENUE} onToggle={toggleDia} err={errors.dias} req />
+        <Sel label="Franja horaria" val={f.franja} on={set("franja")} options={FRANJAS} err={errors.franja} req />
+        {f.franja === "Otro" && (
+          <div className="grid gap-5 sm:grid-cols-2">
+            <Text label="Desde" val={f.franjaDesde} on={set("franjaDesde")} err={errors.franjaDesde} req type="time" />
+            <Text label="Hasta" val={f.franjaHasta} on={set("franjaHasta")} err={errors.franjaHasta} req type="time" />
+          </div>
+        )}
+      </div>
+
+      <div className="my-10 h-px bg-white/10" />
+      <Eyebrow n="03">Contacto</Eyebrow>
       <div className="grid gap-5">
         <Text label="Persona de contacto" val={f.contacto} on={set("contacto")} err={errors.contacto} req />
         <div className="grid gap-5 sm:grid-cols-2">
@@ -336,32 +365,3 @@ function VenueFields({ f, set, errors }: FieldsProps) {
   );
 }
 
-function SpeakerFields({ f, set, errors, tematicas, toggleTema }: FieldsProps & { tematicas: string[]; toggleTema: (v: string) => void }) {
-  return (
-    <>
-      <Eyebrow n="01">Vos</Eyebrow>
-      <div className="grid gap-5">
-        <div className="grid gap-5 sm:grid-cols-2">
-          <Text label="Nombre y apellido" val={f.nombre} on={set("nombre")} err={errors.nombre} req />
-          <Text label="Cargo / rol" val={f.rol} on={set("rol")} err={errors.rol} req ph="Ej: CTO, Founder, Data Lead" />
-        </div>
-        <Text label="Organización que representás" val={f.organizacionRepresenta} on={set("organizacionRepresenta")} err={errors.organizacionRepresenta} ph="(opcional)" />
-        <Area label="Bio" val={f.bio} on={set("bio")} err={errors.bio} req rows={4} ph="Contá brevemente tu recorrido y de qué podés hablar." />
-      </div>
-
-      <div className="my-10 h-px bg-white/10" />
-      <Eyebrow n="02">Temáticas</Eyebrow>
-      <Chips label="¿De qué podés hablar? (elegí las que apliquen)" values={tematicas} options={TEMATICAS} onToggle={toggleTema} err={errors.tematicas} req />
-
-      <div className="my-10 h-px bg-white/10" />
-      <Eyebrow n="03">Contacto</Eyebrow>
-      <div className="grid gap-5">
-        <div className="grid gap-5 sm:grid-cols-2">
-          <Text label="Email" val={f.email} on={set("email")} err={errors.email} req type="email" />
-          <Text label="Teléfono" val={f.telefono} on={set("telefono")} err={errors.telefono} type="tel" ph="(opcional)" />
-        </div>
-        <Text label="LinkedIn" val={f.linkedin} on={set("linkedin")} err={errors.linkedin} type="url" ph="https://linkedin.com/in/… (opcional)" />
-      </div>
-    </>
-  );
-}

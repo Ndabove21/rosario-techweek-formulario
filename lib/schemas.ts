@@ -22,6 +22,24 @@ export const DIAS = ["Lun 19/10", "Mar 20/10", "Mié 21/10", "Jue 22/10", "Vie 2
 
 export const BLOQUES = ["AM (9-12)", "PM (17-20)", "Noche (20+)"] as const;
 
+// Venue: días que puede prestar (19 al 24/10) + franja horaria
+export const DIAS_VENUE = [
+  "Lun 19/10", "Mar 20/10", "Mié 21/10", "Jue 22/10", "Vie 23/10", "Sáb 24/10",
+] as const;
+
+export const FRANJAS = ["AM (09:00–13:00)", "PM (17:00–20:00)", "Otro"] as const;
+
+// Para "Sumar evento": financiamiento del evento y necesidades de montaje.
+export const FINANCIAMIENTO = [
+  "Autofinanciado / la organización", "Sponsors / auspiciantes", "Cobro de entrada",
+  "Necesita apoyo del Hub", "A definir",
+] as const;
+
+export const NECESIDADES = [
+  "Proyector", "Pantalla / TV", "Sonido / micrófono", "Mesas", "Sillas / asientos",
+  "Internet / wifi", "Streaming", "Catering", "Nada, lo resuelvo yo",
+] as const;
+
 export const TEMATICAS = [
   "IA / ML", "Startups", "Software / Dev", "Producto / UX", "Inversión / VC",
   "Growth / Marketing", "Data / Analytics", "Legal / Legaltech", "Fintech",
@@ -57,6 +75,12 @@ export const eventoSchema = z.object({
   whatsapp: z.string().min(6, "Poné un WhatsApp válido."),
   organizacion: z.string().optional().default(""),
   webLinkedin: z.string().url("URL inválida.").optional().or(z.literal("")),
+  // El organizador propone el contenido completo del evento
+  tematicas: z.array(z.enum(TEMATICAS)).min(1, "Elegí al menos una temática."),
+  speakers: z.string().min(3, "Proponé al menos un speaker (nombre y de qué habla)."),
+  propuestaValor: z.string().min(20, "Contanos la propuesta de valor (mín. 20 caracteres)."),
+  financiamiento: z.enum(FINANCIAMIENTO, { errorMap: () => ({ message: "Elegí cómo se financia." }) }),
+  necesidades: z.array(z.enum(NECESIDADES)).min(1, "Elegí qué necesitás para el montaje."),
   ...antiSpam,
 });
 
@@ -71,28 +95,24 @@ export const venueSchema = z.object({
   contacto: z.string().min(2, "¿Con quién nos contactamos?"),
   email: z.string().email("Email inválido."),
   telefono: z.string().min(6, "Poné un teléfono válido."),
+  // disponibilidad del espacio
+  dias: z.array(z.enum(DIAS_VENUE)).min(1, "Elegí al menos un día que puedas prestar el espacio."),
+  franja: z.enum(FRANJAS, { errorMap: () => ({ message: "Elegí una franja horaria." }) }),
+  franjaDesde: z.string().optional().default(""),
+  franjaHasta: z.string().optional().default(""),
   ...antiSpam,
 });
 
-// ── Camino 3 · Ser speaker → base PERSONAS ──────────────────────────────
-export const speakerSchema = z.object({
-  via: z.literal("speaker"),
-  nombre: z.string().min(2, "Poné tu nombre y apellido."),
-  rol: z.string().min(2, "¿Cuál es tu cargo/rol?"),
-  organizacionRepresenta: z.string().optional().default(""),
-  bio: z.string().min(20, "Contanos un poco de vos (mín. 20 caracteres)."),
-  tematicas: z.array(z.enum(TEMATICAS)).min(1, "Elegí al menos una temática."),
-  email: z.string().email("Email inválido."),
-  telefono: z.string().optional().default(""),
-  linkedin: z.string().url("URL inválida.").optional().or(z.literal("")),
-  ...antiSpam,
-});
-
-export const submissionSchema = z.discriminatedUnion("via", [
-  eventoSchema, venueSchema, speakerSchema,
-]);
+export const submissionSchema = z
+  .discriminatedUnion("via", [eventoSchema, venueSchema])
+  .superRefine((d, ctx) => {
+    // Si la franja es "Otro", el inicio y fin son obligatorios.
+    if (d.via === "venue" && d.franja === "Otro") {
+      if (!d.franjaDesde) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["franjaDesde"], message: "Indicá desde qué hora." });
+      if (!d.franjaHasta) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["franjaHasta"], message: "Indicá hasta qué hora." });
+    }
+  });
 
 export type Submission = z.infer<typeof submissionSchema>;
 export type EventoInput = z.infer<typeof eventoSchema>;
 export type VenueInput = z.infer<typeof venueSchema>;
-export type SpeakerInput = z.infer<typeof speakerSchema>;

@@ -86,6 +86,28 @@ antes de escribir — no se confía en lo que llega del cliente.
   `Representa a: …`; el equipo la vincula a mano.
 - **Rate limit:** en memoria por IP (5/min). Para escala real, mover a Vercel KV / Upstash.
 
+## Cómo embeberlo en el sitio principal (para quien lo integra)
+
+⚠️ **Esto NO es un snippet HTML estático**: es una app Next.js con **backend** — la ruta
+`app/api/submit` escribe en Notion del lado del servidor. No se puede pegar como HTML suelto en
+un hosting estático; necesita correr con Node. Dos formas:
+
+**A · Standalone + iframe/link (lo más simple)**
+1. Deployar este repo tal cual en **Vercel** (con las env vars de Notion cargadas).
+2. Apuntar `eventos.rosariotechweek.com` a ese deploy (CNAME → `cname.vercel-dns.com`).
+3. En el sitio principal, enlazar los botones "Quiero sumarme" a esa URL, **o** embeber con iframe:
+   ```html
+   <iframe src="https://eventos.rosariotechweek.com" style="width:100%;min-height:100vh;border:0"></iframe>
+   ```
+
+**B · Integrar en el código del sitio principal (si es Next.js App Router)**
+1. Copiar `app/page.tsx` (p. ej. como ruta `/sumate`), `app/api/submit/route.ts` y `lib/`.
+2. Instalar `@notionhq/client` y `zod` en el proyecto principal.
+3. Cargar las env vars de Notion en ese proyecto y verificar con `/api/health`.
+
+**En cualquier caso:** sin `NOTION_TOKEN` configurado (y las bases compartidas con la integración),
+el form **no escribe en Notion**. Ver secciones **2** y **3**.
+
 ## Seguridad
 
 - `NOTION_TOKEN` solo en el server (`app/api/*`, `lib/notion.ts`). No aparece en el bundle del cliente.

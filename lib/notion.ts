@@ -1,12 +1,11 @@
 import { Client } from "@notionhq/client";
-import type { EventoInput, VenueInput, SpeakerInput, Submission } from "./schemas";
+import type { EventoInput, VenueInput, Submission } from "./schemas";
 
 export const notion = new Client({ auth: process.env.NOTION_TOKEN });
 
 export const DB = {
   eventos: process.env.NOTION_DB_EVENTOS ?? "",
   organizaciones: process.env.NOTION_DB_ORGANIZACIONES ?? "",
-  personas: process.env.NOTION_DB_PERSONAS ?? "",
 };
 
 // ── Helpers: cada tipo de propiedad de Notion tiene su forma exacta ────────
@@ -26,13 +25,23 @@ const crear = (arg: unknown) => notion.pages.create(arg as CreateArg);
 
 // ── Camino 1 · Evento → EVENTOS ───────────────────────────────────────────
 function crearEvento(d: EventoInput) {
+  // EVENTOS no tiene columnas para speakers/temáticas/financiamiento/montaje:
+  // en v1 se anexan al final de "Descripción". Si el equipo crea esas propiedades,
+  // se mapean como columnas propias.
+  const descripcionCompleta =
+    d.descripcion +
+    `\n\n— Temáticas: ${d.tematicas.join(", ")}` +
+    `\n— Speakers propuestos: ${d.speakers}` +
+    `\n— Propuesta de valor: ${d.propuestaValor}` +
+    `\n— Financiamiento: ${d.financiamiento}` +
+    `\n— Necesidades de montaje: ${d.necesidades.join(", ")}`;
   return crear({
     parent: { database_id: DB.eventos },
     properties: {
       "Evento": title(d.evento),
       "Formato": sel(d.formato),
       "Pilar": sel(d.pilar),
-      "Descripción": rich(d.descripcion),
+      "Descripción": rich(descripcionCompleta),
       "Público objetivo": rich(d.publicoObjetivo),
       "¿Necesita venue?": sel(d.necesitaVenue),
       "Capacidad estimada": num(d.capacidad),
@@ -53,7 +62,10 @@ function crearEvento(d: EventoInput) {
 
 // ── Camino 2 · Venue → ORGANIZACIONES ─────────────────────────────────────
 function crearVenue(d: VenueInput) {
-  const notas = `Contacto: ${d.contacto} · Email: ${d.email} · Tel: ${d.telefono}`;
+  const franjaTexto = d.franja === "Otro" ? `${d.franjaDesde}–${d.franjaHasta}` : d.franja;
+  const notas =
+    `Contacto: ${d.contacto} · Email: ${d.email} · Tel: ${d.telefono}` +
+    ` · Días disponibles: ${d.dias.join(", ")} · Franja horaria: ${franjaTexto}`;
   return crear({
     parent: { database_id: DB.organizaciones },
     properties: {
@@ -71,35 +83,10 @@ function crearVenue(d: VenueInput) {
   });
 }
 
-// ── Camino 3 · Speaker → PERSONAS ─────────────────────────────────────────
-function crearSpeaker(d: SpeakerInput) {
-  // "Organización que representa" es una relación en Notion (no escribible simple
-  // por API): en v1 se guarda como texto dentro de Bio. El equipo la vincula a mano.
-  const bio = d.organizacionRepresenta
-    ? `Representa a: ${d.organizacionRepresenta}. ${d.bio}`
-    : d.bio;
-  return crear({
-    parent: { database_id: DB.personas },
-    properties: {
-      "Nombre": title(d.nombre),
-      "Rol": rich(d.rol),
-      "Bio": rich(bio),
-      "Temáticas": multi(d.tematicas),
-      "Email": email(d.email),
-      "Teléfono": phone(d.telefono ?? ""),
-      "LinkedIn": url(d.linkedin || undefined),
-      // Valores fijos
-      "Tipo": multi(["Speaker"]),
-      "Estado": sel("Propuesto"),
-    },
-  });
-}
-
 /** Escribe la propuesta validada en la base de Notion que corresponda. */
 export async function guardarEnNotion(data: Submission) {
   switch (data.via) {
     case "evento": return crearEvento(data);
     case "venue": return crearVenue(data);
-    case "speaker": return crearSpeaker(data);
   }
 }
