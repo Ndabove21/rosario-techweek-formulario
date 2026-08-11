@@ -12,8 +12,11 @@ export const FORMATOS = [
 
 export const PILARES = ["Conocimiento", "Comunidad", "Negocios"] as const;
 
+// Binario a propósito: o tenés lugar o no. La opción "Es flexible" existe en el
+// select de Notion pero se sacó del form — no le decía nada útil a quien asigna
+// venues. El equipo puede seguir usándola a mano.
 export const NECESITA_VENUE = [
-  "Trae su propio lugar", "Necesita que el Hub le asigne uno", "Es flexible",
+  "Trae su propio lugar", "Necesita que el Hub le asigne uno",
 ] as const;
 
 export const COSTOS = ["Gratuito", "Pago", "A definir"] as const;
