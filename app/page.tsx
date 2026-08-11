@@ -268,9 +268,8 @@ function Success() {
       <div className="mx-auto flex size-12 items-center justify-center rounded-full border border-white/20 text-xl">✓</div>
       <h1 className="mt-6 text-3xl font-semibold tracking-tight">¡Gracias!</h1>
       <p className="mx-auto mt-4 max-w-md text-[15px] leading-relaxed text-neutral-400">
-        Recibimos tu propuesta. El equipo la revisa en menos de 48 hs hábiles y te escribimos por email.
-        <br /><br />
-        Dudas: <a href="mailto:eventos@rosariotechweek.com" className="text-neutral-200 underline underline-offset-4">eventos@rosariotechweek.com</a>
+        Recibimos tu propuesta. El equipo la revisa en menos de 48 hs hábiles y te escribimos
+        al email que dejaste.
       </p>
     </div>
   );

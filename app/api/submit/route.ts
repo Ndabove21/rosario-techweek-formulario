@@ -56,7 +56,7 @@ export async function POST(req: Request) {
   if (!process.env.NOTION_TOKEN) {
     console.error("[submit] Falta NOTION_TOKEN en el entorno.");
     return NextResponse.json(
-      { ok: false, error: "El servidor no está configurado. Escribinos a eventos@rosariotechweek.com." },
+      { ok: false, error: "El servidor no está configurado. Probá de nuevo en unos minutos." },
       { status: 500 },
     );
   }
