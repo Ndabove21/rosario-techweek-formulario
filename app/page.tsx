@@ -140,7 +140,7 @@ export default function Page() {
     const base = { via: v, noSoyBot, website };
     if (v === "evento") return { ...base, evento: f.evento, formato: f.formato, pilar: f.pilar,
       descripcion: f.descripcion, publicoObjetivo: f.publicoObjetivo, necesitaVenue: f.necesitaVenue,
-      capacidad: f.capacidad, costo: f.costo, proponente: f.proponente,
+      lugarPropio: f.lugarPropio ?? "", capacidad: f.capacidad, costo: f.costo, proponente: f.proponente,
       email: f.email, whatsapp: f.whatsapp, organizacion: f.organizacion ?? "", webLinkedin: f.webLinkedin ?? "",
       tematicas, speakers, propuestaValor: f.propuestaValor };
     return { ...base, espacio: f.espacio, direccion: f.direccion, capacidad: f.capacidad,
@@ -360,6 +360,10 @@ function EventoFields({ f, set, errors, tematicas, toggleTema, speakers, addSpea
       <Eyebrow n="03">Logística</Eyebrow>
       <div className="grid gap-5">
         <Sel label="¿Tenés dónde hacerlo?" val={f.necesitaVenue} on={set("necesitaVenue")} options={NECESITA_VENUE} err={errors.necesitaVenue} req />
+        {f.necesitaVenue === "Trae su propio lugar" && (
+          <Text label="¿Dónde lo hacés?" val={f.lugarPropio} on={set("lugarPropio")} err={errors.lugarPropio} req
+            ph="Nombre y dirección. Ej: Cowork Nodo, Córdoba 1234" />
+        )}
         <p className="-mt-2 text-[13px] leading-relaxed text-neutral-500">
           Los eventos son autogestionados: vos resolvés el montaje y la producción. Si no tenés lugar,
           el Hub te asigna uno y define el día y el bloque (mañana o tarde) según la grilla.

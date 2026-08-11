@@ -86,6 +86,8 @@ export const eventoSchema = z.object({
   }),
   publicoObjetivo: z.string().min(3, "Contanos a quién apunta."),
   necesitaVenue: z.enum(NECESITA_VENUE, { errorMap: () => ({ message: "Elegí una opción." }) }),
+  // Solo si trae su propio lugar. Obligatorio en ese caso (ver superRefine).
+  lugarPropio: z.string().max(300).optional().default(""),
   capacidad: z.coerce.number().int().positive("Poné una capacidad válida."),
   costo: z.enum(COSTOS, { errorMap: () => ({ message: "Elegí una opción." }) }),
   proponente: z.string().min(2, "¿Cómo te llamás?"),
@@ -123,6 +125,13 @@ export const venueSchema = z.object({
 export const submissionSchema = z
   .discriminatedUnion("via", [eventoSchema, venueSchema])
   .superRefine((d, ctx) => {
+    // Si trae su propio lugar, hay que saber cuál es.
+    if (d.via === "evento" && d.necesitaVenue === "Trae su propio lugar" && !d.lugarPropio?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom, path: ["lugarPropio"],
+        message: "Decinos dónde lo hacés (nombre y dirección).",
+      });
+    }
     // Si la franja es "Otro", el inicio y fin son obligatorios.
     if (d.via === "venue" && d.franja === "Otro") {
       if (!d.franjaDesde) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["franjaDesde"], message: "Indicá desde qué hora." });

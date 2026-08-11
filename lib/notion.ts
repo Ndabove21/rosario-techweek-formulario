@@ -53,8 +53,13 @@ function crearSpeaker(sp: SpeakerInput, eventoId: string, tematicas: readonly st
 async function crearEvento(d: EventoInput) {
   // EVENTOS no tiene columna de temáticas: se anexan al final de "Descripción".
   // Los speakers ya NO van acá — cada uno es una fila propia en 🗣️ Speakers.
+  // El lugar propio va acá y no en la propiedad "Venue": esa es una relación a
+  // 🏠 Host y vincularla exigiría crear una organización por cada propuesta, sin
+  // verificar. El equipo lo lee en curaduría y lo vincula a mano si corresponde.
   const descripcionCompleta =
-    d.descripcion + `\n\n— Temáticas: ${d.tematicas.join(", ")}`;
+    d.descripcion +
+    `\n\n— Temáticas: ${d.tematicas.join(", ")}` +
+    (d.lugarPropio?.trim() ? `\n— Lugar propio que aporta: ${d.lugarPropio.trim()}` : "");
 
   const evento = await crear({
     parent: { database_id: DB.eventos },
