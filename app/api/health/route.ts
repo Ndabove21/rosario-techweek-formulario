@@ -4,10 +4,10 @@ import { notion, DB } from "@/lib/notion";
 export const runtime = "nodejs";
 
 /**
- * GET /api/health  —  confirma que el token alcanza las 3 bases ANTES de salir
- * a producción. Devuelve el título de cada base (para verificar que son las
- * correctas) o el error de la API. Si un ID es de "database" vs "data source"
- * y la API lo rechaza, se ve acá.
+ * GET /api/health  —  confirma que el token alcanza las 3 bases (Eventos, Host
+ * y Speakers) ANTES de salir a producción. Devuelve el título de cada base (para
+ * verificar que son las correctas) o el error de la API. Si un ID es de
+ * "database" vs "data source" y la API lo rechaza, se ve acá.
  * Se protege con ?secret=<HEALTH_SECRET> si esa env var está seteada.
  */
 export async function GET(req: Request) {

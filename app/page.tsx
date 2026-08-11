@@ -2,9 +2,13 @@
 
 import { useState } from "react";
 import {
-  FORMATOS, PILARES, NECESITA_VENUE, COSTOS, DIAS, BLOQUES, TEMATICAS,
-  DIAS_VENUE, FRANJAS, FINANCIAMIENTO, NECESIDADES, submissionSchema,
+  FORMATOS, PILARES, NECESITA_VENUE, COSTOS, TEMATICAS,
+  DIAS_VENUE, FRANJAS, MAX_SPEAKERS, submissionSchema,
 } from "@/lib/schemas";
+
+/** Un speaker en el estado del form (todos string: se validan al enviar). */
+type Speaker = { nombre: string; rol: string; tema: string; linkedin: string };
+const speakerVacio = (): Speaker => ({ nombre: "", rol: "", tema: "", linkedin: "" });
 
 type Via = "evento" | "venue";
 type Status = "idle" | "sending" | "ok" | "error";
@@ -107,7 +111,7 @@ export default function Page() {
   const [f, setF] = useState<Record<string, string>>({});
   const [tematicas, setTematicas] = useState<string[]>([]);
   const [diasVenue, setDiasVenue] = useState<string[]>([]);
-  const [necesidades, setNecesidades] = useState<string[]>([]);
+  const [speakers, setSpeakers] = useState<Speaker[]>([]);
   const [noSoyBot, setNoSoyBot] = useState(false);
   const [website, setWebsite] = useState(""); // honeypot
 
@@ -117,10 +121,17 @@ export default function Page() {
   };
   const toggleTema = (t: string) => setTematicas((s) => (s.includes(t) ? s.filter((x) => x !== t) : [...s, t]));
   const toggleDia = (t: string) => setDiasVenue((s) => (s.includes(t) ? s.filter((x) => x !== t) : [...s, t]));
-  const toggleNecesidad = (t: string) => setNecesidades((s) => (s.includes(t) ? s.filter((x) => x !== t) : [...s, t]));
+
+  const addSpeaker = () => setSpeakers((s) => (s.length >= MAX_SPEAKERS ? s : [...s, speakerVacio()]));
+  const rmSpeaker = (i: number) => setSpeakers((s) => s.filter((_, j) => j !== i));
+  const setSpeaker = (i: number, k: keyof Speaker) => (v: string) => {
+    setSpeakers((s) => s.map((sp, j) => (j === i ? { ...sp, [k]: v } : sp)));
+    const ek = `speakers.${i}.${k}`;
+    if (errors[ek]) setErrors((e) => ({ ...e, [ek]: "" }));
+  };
 
   function choose(v: Via) {
-    setF({}); setTematicas([]); setDiasVenue([]); setNecesidades([]); setErrors({}); setNoSoyBot(false); setWebsite(""); setServerError("");
+    setF({}); setTematicas([]); setDiasVenue([]); setSpeakers([]); setErrors({}); setNoSoyBot(false); setWebsite(""); setServerError("");
     setStatus("idle"); setVia(v);
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -129,10 +140,9 @@ export default function Page() {
     const base = { via: v, noSoyBot, website };
     if (v === "evento") return { ...base, evento: f.evento, formato: f.formato, pilar: f.pilar,
       descripcion: f.descripcion, publicoObjetivo: f.publicoObjetivo, necesitaVenue: f.necesitaVenue,
-      capacidad: f.capacidad, costo: f.costo, dia: f.dia, bloque: f.bloque, proponente: f.proponente,
+      capacidad: f.capacidad, costo: f.costo, proponente: f.proponente,
       email: f.email, whatsapp: f.whatsapp, organizacion: f.organizacion ?? "", webLinkedin: f.webLinkedin ?? "",
-      tematicas, speakers: f.speakers, propuestaValor: f.propuestaValor,
-      financiamiento: f.financiamiento, necesidades };
+      tematicas, speakers, propuestaValor: f.propuestaValor };
     return { ...base, espacio: f.espacio, direccion: f.direccion, capacidad: f.capacidad,
       costoDia: f.costoDia ? f.costoDia : undefined, equipamiento: f.equipamiento ?? "", contacto: f.contacto,
       email: f.email, telefono: f.telefono, dias: diasVenue, franja: f.franja,
@@ -146,7 +156,9 @@ export default function Page() {
     if (!parsed.success) {
       const errs: Errors = {};
       for (const issue of parsed.error.errors) {
-        const k = String(issue.path[0] ?? "");
+        // path.join da "evento" para campos simples y "speakers.0.nombre" para
+        // los anidados de la lista de speakers.
+        const k = issue.path.join(".");
         if (k && !errs[k]) errs[k] = issue.message;
       }
       setErrors(errs);
@@ -172,7 +184,7 @@ export default function Page() {
       {/* Header */}
       <header className="flex items-center justify-between">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="https://rosariotechweek.com/logo.svg" alt="Rosario Tech Week" className="h-7 w-auto" />
+        <img src="https://rosariotechweek.com/logo.svg" alt="Rosario Tech Week" className="h-16 w-auto sm:h-20" />
         <span className="font-mono text-[11px] uppercase tracking-[0.22em] text-neutral-500">Convocatoria</span>
       </header>
 
@@ -189,14 +201,16 @@ export default function Page() {
             </p>
             <div className="mt-10 grid gap-3">
               {CARDS.map((c) => (
+                // En mobile apila (si no, las 3 columnas estrangulan el texto);
+                // desde sm vuelve a la fila de siempre.
                 <button key={c.via} onClick={() => choose(c.via)}
-                  className="group flex items-center gap-5 rounded-xl border border-white/12 bg-white/[0.02] p-5 text-left transition-colors hover:border-white/40 hover:bg-white/[0.04]">
+                  className="group flex flex-col items-start gap-2 rounded-xl border border-white/12 bg-white/[0.02] p-5 text-left transition-colors hover:border-white/40 hover:bg-white/[0.04] sm:flex-row sm:items-center sm:gap-5">
                   <span className="font-mono text-xs text-neutral-600">— {c.n}</span>
                   <span className="flex-1">
                     <span className="block text-lg font-medium">{c.titulo}</span>
                     <span className="mt-0.5 block text-sm text-neutral-400">{c.desc}</span>
                   </span>
-                  <span className="text-neutral-500 transition-transform group-hover:translate-x-0.5">Quiero sumarme →</span>
+                  <span className="mt-1 text-neutral-500 transition-transform group-hover:translate-x-0.5 sm:mt-0">Quiero sumarme →</span>
                 </button>
               ))}
             </div>
@@ -210,7 +224,7 @@ export default function Page() {
 
             {via === "evento" && (
               <EventoFields f={f} set={set} errors={errors} tematicas={tematicas} toggleTema={toggleTema}
-                necesidades={necesidades} toggleNecesidad={toggleNecesidad} />
+                speakers={speakers} addSpeaker={addSpeaker} rmSpeaker={rmSpeaker} setSpeaker={setSpeaker} />
             )}
             {via === "venue" && <VenueFields f={f} set={set} errors={errors} dias={diasVenue} toggleDia={toggleDia} />}
 
@@ -265,8 +279,59 @@ function Success() {
 // ── Los 3 caminos ──────────────────────────────────────────────────────────
 type FieldsProps = { f: Record<string, string>; set: (k: string) => (v: string) => void; errors: Errors };
 
-function EventoFields({ f, set, errors, tematicas, toggleTema, necesidades, toggleNecesidad }: FieldsProps & {
-  tematicas: string[]; toggleTema: (v: string) => void; necesidades: string[]; toggleNecesidad: (v: string) => void;
+/** Lista dinámica de speakers. Opcional: hay formatos que no llevan ninguno. */
+function SpeakersBlock({ speakers, add, rm, set, errors }: {
+  speakers: Speaker[]; add: () => void; rm: (i: number) => void;
+  set: (i: number, k: keyof Speaker) => (v: string) => void; errors: Errors;
+}) {
+  return (
+    <div>
+      <Lbl>Speakers que proponés</Lbl>
+      <p className="mb-4 text-[13px] leading-relaxed text-neutral-500">
+        Opcional — si tu evento no lleva speakers (networking, after office, visita), dejalo vacío.
+        Cada persona que cargues queda registrada para la curaduría.
+      </p>
+
+      {speakers.map((sp, i) => (
+        <div key={i} className="mb-3 rounded-xl border border-white/12 bg-white/[0.02] p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-neutral-500">
+              Speaker {String(i + 1).padStart(2, "0")}
+            </span>
+            <button type="button" onClick={() => rm(i)}
+              className="text-[13px] text-neutral-500 transition-colors hover:text-red-400">
+              Quitar
+            </button>
+          </div>
+          <div className="grid gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Text label="Nombre y apellido" val={sp.nombre} on={set(i, "nombre")} err={errors[`speakers.${i}.nombre`]} req ph="Juana Pérez" />
+              <Text label="Rol / organización" val={sp.rol} on={set(i, "rol")} err={errors[`speakers.${i}.rol`]} ph="CTO en Acme (opcional)" />
+            </div>
+            <Text label="¿De qué habla?" val={sp.tema} on={set(i, "tema")} err={errors[`speakers.${i}.tema`]} req ph="IA aplicada a pymes industriales" />
+            <Text label="LinkedIn" val={sp.linkedin} on={set(i, "linkedin")} err={errors[`speakers.${i}.linkedin`]} type="url" ph="linkedin.com/in/perfil (opcional)" />
+          </div>
+        </div>
+      ))}
+
+      {speakers.length < MAX_SPEAKERS && (
+        <button type="button" onClick={add}
+          className="w-full rounded-lg border border-dashed border-white/20 px-4 py-3 text-[14px] text-neutral-400 transition-colors hover:border-white/40 hover:text-neutral-200">
+          + Agregar {speakers.length ? "otro " : ""}speaker
+        </button>
+      )}
+      {speakers.length >= MAX_SPEAKERS && (
+        <p className="text-[13px] text-neutral-500">Llegaste al máximo de {MAX_SPEAKERS} speakers.</p>
+      )}
+      <Err msg={errors.speakers} />
+    </div>
+  );
+}
+
+function EventoFields({ f, set, errors, tematicas, toggleTema, speakers, addSpeaker, rmSpeaker, setSpeaker }: FieldsProps & {
+  tematicas: string[]; toggleTema: (v: string) => void;
+  speakers: Speaker[]; addSpeaker: () => void; rmSpeaker: (i: number) => void;
+  setSpeaker: (i: number, k: keyof Speaker) => (v: string) => void;
 }) {
   return (
     <>
@@ -286,25 +351,22 @@ function EventoFields({ f, set, errors, tematicas, toggleTema, necesidades, togg
       <Eyebrow n="02">Contenido y speakers</Eyebrow>
       <div className="grid gap-5">
         <Chips label="Temáticas que toca el evento" values={tematicas} options={TEMATICAS} onToggle={toggleTema} err={errors.tematicas} req />
-        <Area label="Speakers que proponés" val={f.speakers} on={set("speakers")} err={errors.speakers} req rows={3}
-          ph="Nombre y de qué habla cada uno. Ej: Juana Pérez — IA aplicada a pymes." />
+        <SpeakersBlock speakers={speakers} add={addSpeaker} rm={rmSpeaker} set={setSpeaker} errors={errors} />
         <Area label="Propuesta de valor del evento" val={f.propuestaValor} on={set("propuestaValor")} err={errors.propuestaValor} req rows={3}
           ph="¿Por qué vale la pena? ¿Qué lo hace único?" />
       </div>
 
       <div className="my-10 h-px bg-white/10" />
-      <Eyebrow n="03">Logística y montaje</Eyebrow>
+      <Eyebrow n="03">Logística</Eyebrow>
       <div className="grid gap-5">
         <Sel label="¿Tenés dónde hacerlo?" val={f.necesitaVenue} on={set("necesitaVenue")} options={NECESITA_VENUE} err={errors.necesitaVenue} req />
+        <p className="-mt-2 text-[13px] leading-relaxed text-neutral-500">
+          Los eventos son autogestionados: vos resolvés el montaje y la producción. Si no tenés lugar,
+          el Hub te asigna uno y define el día y el bloque (mañana o tarde) según la grilla.
+        </p>
         <div className="grid gap-5 sm:grid-cols-2">
           <Text label="¿Cuántas personas proyectás? (lo más real posible)" val={f.capacidad} on={set("capacidad")} err={errors.capacidad} req type="number" ph="80" />
           <Sel label="Costo para el asistente" val={f.costo} on={set("costo")} options={COSTOS} err={errors.costo} req />
-        </div>
-        <Chips label="¿Qué necesitás para el montaje?" values={necesidades} options={NECESIDADES} onToggle={toggleNecesidad} err={errors.necesidades} req />
-        <Sel label="¿Cómo se financia el evento?" val={f.financiamiento} on={set("financiamiento")} options={FINANCIAMIENTO} err={errors.financiamiento} req />
-        <div className="grid gap-5 sm:grid-cols-2">
-          <Sel label="Día preferido" val={f.dia} on={set("dia")} options={DIAS} err={errors.dia} req />
-          <Sel label="Bloque preferido" val={f.bloque} on={set("bloque")} options={BLOQUES} err={errors.bloque} req />
         </div>
       </div>
 
@@ -319,7 +381,7 @@ function EventoFields({ f, set, errors, tematicas, toggleTema, necesidades, togg
           <Text label="Email" val={f.email} on={set("email")} err={errors.email} req type="email" />
           <Text label="WhatsApp" val={f.whatsapp} on={set("whatsapp")} err={errors.whatsapp} req type="tel" ph="+54 341…" />
         </div>
-        <Text label="Web / LinkedIn" val={f.webLinkedin} on={set("webLinkedin")} err={errors.webLinkedin} type="url" ph="https://… (opcional)" />
+        <Text label="Web / LinkedIn" val={f.webLinkedin} on={set("webLinkedin")} err={errors.webLinkedin} type="url" ph="linkedin.com/in/tu-perfil (opcional)" />
       </div>
     </>
   );

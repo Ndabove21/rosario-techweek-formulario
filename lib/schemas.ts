@@ -18,9 +18,9 @@ export const NECESITA_VENUE = [
 
 export const COSTOS = ["Gratuito", "Pago", "A definir"] as const;
 
-export const DIAS = ["Lun 19/10", "Mar 20/10", "Mié 21/10", "Jue 22/10", "Vie 23/10"] as const;
-
-export const BLOQUES = ["AM (9-12)", "PM (17-20)", "Noche (20+)"] as const;
+// Nota: "Día" y "Bloque" existen como propiedades en la base EVENTOS, pero NO se
+// le piden al proponente — los eventos son autogestionados y el Hub asigna la
+// grilla durante la curaduría. Se cargan a mano en Notion.
 
 // Venue: días que puede prestar (19 al 24/10) + franja horaria
 export const DIAS_VENUE = [
@@ -29,17 +29,6 @@ export const DIAS_VENUE = [
 
 export const FRANJAS = ["AM (09:00–13:00)", "PM (17:00–20:00)", "Otro"] as const;
 
-// Para "Sumar evento": financiamiento del evento y necesidades de montaje.
-export const FINANCIAMIENTO = [
-  "Autofinanciado / la organización", "Sponsors / auspiciantes", "Cobro de entrada",
-  "Necesita apoyo del Hub", "A definir",
-] as const;
-
-export const NECESIDADES = [
-  "Proyector", "Pantalla / TV", "Sonido / micrófono", "Mesas", "Sillas / asientos",
-  "Internet / wifi", "Streaming", "Catering", "Nada, lo resuelvo yo",
-] as const;
-
 export const TEMATICAS = [
   "IA / ML", "Startups", "Software / Dev", "Producto / UX", "Inversión / VC",
   "Growth / Marketing", "Data / Analytics", "Legal / Legaltech", "Fintech",
@@ -47,6 +36,34 @@ export const TEMATICAS = [
 ] as const;
 
 const contarPalabras = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
+
+/** Tope de speakers por propuesta (un panel grande no pasa de esto). */
+export const MAX_SPEAKERS = 8;
+
+/**
+ * URL tolerante: la gente escribe "www.algo.com" o "linkedin.com/in/juan" sin
+ * protocolo, y `z.string().url()` los rechaza. Acá se normaliza antes de validar
+ * (se le antepone https://) y se guarda en Notion ya normalizada. Campo opcional:
+ * vacío pasa como "".
+ */
+const urlTolerante = (msg: string) =>
+  z.preprocess((v) => {
+    const s = String(v ?? "").trim();
+    if (!s) return "";
+    return /^https?:\/\//i.test(s) ? s : `https://${s}`;
+  }, z.union([z.literal(""), z.string().url(msg)]));
+
+/**
+ * Speaker propuesto. Cada uno se convierte en una fila de la base 🗣️ Speakers,
+ * vinculada al evento. La sección es OPCIONAL: hay formatos (After Office, Cena,
+ * Networking, Visita) que no llevan speakers, y obligarlos frenaba el envío.
+ */
+export const speakerSchema = z.object({
+  nombre: z.string().min(2, "Poné nombre y apellido."),
+  rol: z.string().max(200).optional().default(""),
+  tema: z.string().min(3, "Contá de qué habla."),
+  linkedin: urlTolerante("Revisá el LinkedIn (ej: linkedin.com/in/perfil)."),
+});
 
 // Campos anti-spam comunes a los 3 caminos
 const antiSpam = {
@@ -68,19 +85,16 @@ export const eventoSchema = z.object({
   necesitaVenue: z.enum(NECESITA_VENUE, { errorMap: () => ({ message: "Elegí una opción." }) }),
   capacidad: z.coerce.number().int().positive("Poné una capacidad válida."),
   costo: z.enum(COSTOS, { errorMap: () => ({ message: "Elegí una opción." }) }),
-  dia: z.enum(DIAS, { errorMap: () => ({ message: "Elegí un día." }) }),
-  bloque: z.enum(BLOQUES, { errorMap: () => ({ message: "Elegí un bloque." }) }),
   proponente: z.string().min(2, "¿Cómo te llamás?"),
   email: z.string().email("Email inválido."),
   whatsapp: z.string().min(6, "Poné un WhatsApp válido."),
   organizacion: z.string().optional().default(""),
-  webLinkedin: z.string().url("URL inválida.").optional().or(z.literal("")),
+  webLinkedin: urlTolerante("Revisá la dirección (ej: linkedin.com/in/tu-perfil)."),
   // El organizador propone el contenido completo del evento
   tematicas: z.array(z.enum(TEMATICAS)).min(1, "Elegí al menos una temática."),
-  speakers: z.string().min(3, "Proponé al menos un speaker (nombre y de qué habla)."),
+  // Opcional: no todos los formatos llevan speakers.
+  speakers: z.array(speakerSchema).max(MAX_SPEAKERS, `Máximo ${MAX_SPEAKERS} speakers.`).default([]),
   propuestaValor: z.string().min(20, "Contanos la propuesta de valor (mín. 20 caracteres)."),
-  financiamiento: z.enum(FINANCIAMIENTO, { errorMap: () => ({ message: "Elegí cómo se financia." }) }),
-  necesidades: z.array(z.enum(NECESIDADES)).min(1, "Elegí qué necesitás para el montaje."),
   ...antiSpam,
 });
 
@@ -116,3 +130,4 @@ export const submissionSchema = z
 export type Submission = z.infer<typeof submissionSchema>;
 export type EventoInput = z.infer<typeof eventoSchema>;
 export type VenueInput = z.infer<typeof venueSchema>;
+export type SpeakerInput = z.infer<typeof speakerSchema>;
