@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import {
-  FORMATOS, PILARES, NECESITA_VENUE, COSTOS, TEMATICAS,
+  FORMATOS, PILARES, NECESITA_VENUE, COSTOS, TEMATICAS, DIAS,
   DIAS_VENUE, FRANJAS, MAX_SPEAKERS, submissionSchema,
 } from "@/lib/schemas";
 
@@ -140,7 +140,8 @@ export default function Page() {
     const base = { via: v, noSoyBot, website };
     if (v === "evento") return { ...base, evento: f.evento, formato: f.formato, pilar: f.pilar,
       descripcion: f.descripcion, publicoObjetivo: f.publicoObjetivo, necesitaVenue: f.necesitaVenue,
-      lugarPropio: f.lugarPropio ?? "", capacidad: f.capacidad, costo: f.costo, proponente: f.proponente,
+      lugarPropio: f.lugarPropio ?? "", capacidad: f.capacidad, costo: f.costo,
+      dia: f.dia, horaInicio: f.horaInicio, horaFin: f.horaFin, proponente: f.proponente,
       email: f.email, whatsapp: f.whatsapp, organizacion: f.organizacion ?? "", webLinkedin: f.webLinkedin ?? "",
       tematicas, speakers, propuestaValor: f.propuestaValor };
     return { ...base, espacio: f.espacio, direccion: f.direccion, capacidad: f.capacidad,
@@ -196,7 +197,7 @@ export default function Page() {
             <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-neutral-500">— 00 · Es tiempo de acelerar</p>
             <h1 className="mt-5 text-4xl font-semibold tracking-tight md:text-5xl">Sumate a la Rosario Tech Week 2026</h1>
             <p className="mt-4 max-w-lg text-[15px] leading-relaxed text-neutral-400">
-              Del 19 al 23 de octubre. Elegí cómo querés ser parte y contanos tu propuesta —
+              Del 19 al 24 de octubre. Elegí cómo querés ser parte y contanos tu propuesta —
               el equipo la revisa en menos de 48 hs hábiles.
             </p>
             <div className="mt-10 grid gap-3">
@@ -255,7 +256,7 @@ export default function Page() {
       </div>
 
       <footer className="mt-auto border-t border-white/10 pt-6 font-mono text-[11px] uppercase tracking-[0.14em] text-neutral-600">
-        Rosario TechWeek · 2da Edición · 19–23 Octubre 2026 · Rosario, Argentina
+        Rosario TechWeek · 2da Edición · 19–24 Octubre 2026 · Rosario, Argentina
       </footer>
     </main>
   );
@@ -370,6 +371,12 @@ function EventoFields({ f, set, errors, tematicas, toggleTema, speakers, addSpea
         <div className="grid gap-5 sm:grid-cols-2">
           <Text label="¿Cuántas personas proyectás? (lo más real posible)" val={f.capacidad} on={set("capacidad")} err={errors.capacidad} req type="number" ph="80" />
           <Sel label="Costo para el asistente" val={f.costo} on={set("costo")} options={COSTOS} err={errors.costo} req />
+        </div>
+
+        <div className="grid gap-5 sm:grid-cols-3">
+          <Sel label="Día" val={f.dia} on={set("dia")} options={DIAS} err={errors.dia} req />
+          <Text label="Empieza" val={f.horaInicio} on={set("horaInicio")} err={errors.horaInicio} req type="time" />
+          <Text label="Termina" val={f.horaFin} on={set("horaFin")} err={errors.horaFin} req type="time" />
         </div>
       </div>
 

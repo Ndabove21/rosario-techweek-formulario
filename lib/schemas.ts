@@ -21,14 +21,33 @@ export const NECESITA_VENUE = [
 
 export const COSTOS = ["Gratuito", "Pago", "A definir"] as const;
 
-// Nota: "Día" y "Bloque" existen como propiedades en la base EVENTOS, pero NO se
-// le piden al proponente — los eventos son autogestionados y el Hub asigna la
-// grilla durante la curaduría. Se cargan a mano en Notion.
-
-// Venue: días que puede prestar (19 al 24/10) + franja horaria
-export const DIAS_VENUE = [
+// Los 6 días de la semana (19 al 24/10 de 2026). Deben coincidir EXACTO con el
+// select "Día" de la base EVENTOS.
+export const DIAS = [
   "Lun 19/10", "Mar 20/10", "Mié 21/10", "Jue 22/10", "Vie 23/10", "Sáb 24/10",
 ] as const;
+
+/** El venue ofrece disponibilidad sobre el mismo rango de días. */
+export const DIAS_VENUE = DIAS;
+
+/**
+ * Fecha real de cada día, para escribir "Fecha y horario" en Notion y que el
+ * evento aparezca en la vista 📅 Agenda. Verificado contra el calendario 2026:
+ * el 19/10/2026 cae lunes y el 24/10/2026 sábado.
+ */
+export const FECHA_POR_DIA: Record<(typeof DIAS)[number], string> = {
+  "Lun 19/10": "2026-10-19",
+  "Mar 20/10": "2026-10-20",
+  "Mié 21/10": "2026-10-21",
+  "Jue 22/10": "2026-10-22",
+  "Vie 23/10": "2026-10-23",
+  "Sáb 24/10": "2026-10-24",
+};
+
+/** Argentina no tiene horario de verano: siempre UTC-03:00. */
+export const TZ_AR = "-03:00";
+
+const HORA_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 export const FRANJAS = ["AM (09:00–13:00)", "PM (17:00–20:00)", "Otro"] as const;
 
@@ -90,6 +109,10 @@ export const eventoSchema = z.object({
   lugarPropio: z.string().max(300).optional().default(""),
   capacidad: z.coerce.number().int().positive("Poné una capacidad válida."),
   costo: z.enum(COSTOS, { errorMap: () => ({ message: "Elegí una opción." }) }),
+  // Día y horario del evento, dentro de la semana (19 al 24/10).
+  dia: z.enum(DIAS, { errorMap: () => ({ message: "Elegí el día." }) }),
+  horaInicio: z.string().regex(HORA_RE, "Poné la hora de inicio (HH:MM)."),
+  horaFin: z.string().regex(HORA_RE, "Poné la hora de fin (HH:MM)."),
   proponente: z.string().min(2, "¿Cómo te llamás?"),
   email: z.string().email("Email inválido."),
   whatsapp: z.string().min(6, "Poné un WhatsApp válido."),
@@ -125,6 +148,17 @@ export const venueSchema = z.object({
 export const submissionSchema = z
   .discriminatedUnion("via", [eventoSchema, venueSchema])
   .superRefine((d, ctx) => {
+    // Horario: normalmente el fin va después del inicio, pero un after office
+    // puede terminar pasada la medianoche (22:00 → 01:00). Se acepta ese caso
+    // solo si el fin es de madrugada; si no, es un error de carga.
+    if (d.via === "evento" && HORA_RE.test(d.horaInicio) && HORA_RE.test(d.horaFin)) {
+      if (d.horaFin <= d.horaInicio && d.horaFin >= "06:00") {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom, path: ["horaFin"],
+          message: "El fin tiene que ser posterior al inicio.",
+        });
+      }
+    }
     // Si trae su propio lugar, hay que saber cuál es.
     if (d.via === "evento" && d.necesitaVenue === "Trae su propio lugar" && !d.lugarPropio?.trim()) {
       ctx.addIssue({

@@ -1,4 +1,5 @@
 import { Client } from "@notionhq/client";
+import { FECHA_POR_DIA, TZ_AR } from "./schemas";
 import type { EventoInput, VenueInput, Submission, SpeakerInput } from "./schemas";
 
 export const notion = new Client({ auth: process.env.NOTION_TOKEN });
@@ -19,6 +20,36 @@ const email = (e: string) => ({ email: e || null });
 const phone = (p: string) => ({ phone_number: p || null });
 const url = (u?: string) => ({ url: u && u.length ? u : null });
 const rel = (ids: string[]) => ({ relation: ids.map((id) => ({ id })) });
+
+/**
+ * Arma el rango ISO para "Fecha y horario" a partir del día elegido y las horas.
+ * Si el fin es menor o igual al inicio, el evento cruza la medianoche y el fin
+ * cae el día siguiente (el schema solo permite ese caso si termina de madrugada).
+ */
+function rangoHorario(dia: keyof typeof FECHA_POR_DIA, inicio: string, fin: string) {
+  const fecha = FECHA_POR_DIA[dia];
+  // Mediodía UTC para que sumar un día no cruce ningún borde raro.
+  const sumarUnDia = (f: string) => {
+    const d = new Date(`${f}T12:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + 1);
+    return d.toISOString().slice(0, 10);
+  };
+  const fechaFin = fin <= inicio ? sumarUnDia(fecha) : fecha;
+  return {
+    date: {
+      start: `${fecha}T${inicio}:00${TZ_AR}`,
+      end: `${fechaFin}T${fin}:00${TZ_AR}`,
+    },
+  };
+}
+
+/** Bloque aproximado a partir de la hora de inicio, para la vista de grilla. */
+function bloqueDesdeHora(inicio: string): string {
+  const h = Number(inicio.slice(0, 2));
+  if (h < 13) return "AM (9-12)";
+  if (h < 20) return "PM (17-20)";
+  return "Noche (20+)";
+}
 
 // El typing de pages.create es muy estricto; casteamos el arg completo a su
 // tipo real sin acoplarnos a rutas internas del SDK.
@@ -73,7 +104,11 @@ async function crearEvento(d: EventoInput) {
       "¿Necesita venue?": sel(d.necesitaVenue),
       "Capacidad estimada": num(d.capacidad),
       "Costo para el asistente": sel(d.costo),
-      // "Día" y "Bloque" quedan vacíos a propósito: los asigna el Hub en curaduría.
+      "Día": sel(d.dia),
+      // Rango real con hora: alimenta la vista 📅 Agenda del equipo.
+      "Fecha y horario": rangoHorario(d.dia, d.horaInicio, d.horaFin),
+      // Derivado de la hora de inicio, para ordenar la grilla semanal.
+      "Bloque": sel(bloqueDesdeHora(d.horaInicio)),
       "Proponente": rich(d.proponente),
       "Email proponente": email(d.email),
       "Teléfono proponente": phone(d.whatsapp),
