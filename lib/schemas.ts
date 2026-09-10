@@ -130,8 +130,12 @@ const urlTolerante = (msg: string) =>
 /**
  * Plataformas de inscripción aceptadas. Se restringe el dominio a propósito: un
  * link cualquiera (un Drive, un Instagram) no sirve para armar el calendario ni
- * para saber cuánta gente se anotó. Para sumar otra plataforma, agregá el patrón
- * acá y nombrala en PLATAFORMAS_TEXTO.
+ * para saber cuánta gente se anotó.
+ *
+ * OJO con la asimetría, es deliberada: el form pide "Luma" y solo nombra Luma,
+ * porque es la plataforma que el equipo quiere empujar. Eventbrite se acepta en
+ * silencio para no rebotar a quien ya tiene su evento armado ahí. Si cambiás los
+ * textos para nombrar Eventbrite, es una decisión de producto, no un arreglo.
  */
 const PLATAFORMAS_INSCRIPCION = [
   /(^|\.)lu\.ma$/i,
@@ -139,9 +143,6 @@ const PLATAFORMAS_INSCRIPCION = [
   // eventbrite.com, .com.ar, .co.uk, .es… todas las variantes por país.
   /(^|\.)eventbrite\.[a-z]{2,3}(\.[a-z]{2})?$/i,
 ];
-
-/** Cómo se nombran las plataformas en las etiquetas y los mensajes de error. */
-export const PLATAFORMAS_TEXTO = "Luma o Eventbrite";
 
 /**
  * Link de inscripción. Obligatorio: el evento tiene que quedar registrado desde
@@ -155,14 +156,14 @@ const urlInscripcion = z.preprocess(
   },
   z
     .string()
-    .min(1, `Pegá el link de tu evento en ${PLATAFORMAS_TEXTO}.`)
+    .min(1, "Pegá el link de tu evento en Luma.")
     .url("Revisá el link (ej: lu.ma/tu-evento).")
     .refine((u) => {
       try {
         const host = new URL(u).hostname;
         return PLATAFORMAS_INSCRIPCION.some((re) => re.test(host));
       } catch { return false; }
-    }, `Tiene que ser un link de ${PLATAFORMAS_TEXTO} (ej: lu.ma/tu-evento o eventbrite.com/e/tu-evento).`),
+    }, "Tiene que ser un link de evento válido (ej: lu.ma/tu-evento)."),
 );
 
 /**
