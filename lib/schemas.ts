@@ -57,6 +57,58 @@ export const TEMATICAS = [
   "Ciberseguridad", "Comunidad / Cultura", "Industria / AgTech",
 ] as const;
 
+// ─────────────────────────────────────────────────────────────────────────
+// Convocatoria: fechas límite y material de marca. Se muestran en el form —
+// este es el único canal oficial de alta, no hay pedido posterior por WhatsApp.
+// ─────────────────────────────────────────────────────────────────────────
+
+/** Media kit oficial. Se consulta ANTES de diseñar la pieza. */
+export const MEDIA_KIT_URL =
+  "https://drive.google.com/drive/folders/16n-9AfLm-TVIIY9SW84huKj5OwSVKcgy?usp=sharing";
+
+/** Fechas límite de la convocatoria 2026. */
+export const LIMITES = {
+  partnership: "19/9",
+  congelamiento: "9/10",
+} as const;
+
+/** Lo que el flyer tiene que incluir sí o sí (se lista antes de subirlo). */
+export const FLYER_REQUISITOS = [
+  "Logo de Rosario Tech Week 2026",
+  "Fecha del evento",
+  "Horario",
+  "Lugar o modalidad",
+] as const;
+
+/**
+ * Tope del flyer: NO lo pone Notion (aguanta 20 MB) sino Vercel, que corta el
+ * body de una Serverless Function en 4.5 MB. Dejamos margen para el resto del
+ * payload.
+ */
+export const FLYER_MAX_MB = 4;
+export const FLYER_MAX_BYTES = FLYER_MAX_MB * 1024 * 1024;
+export const FLYER_MIME = [
+  "image/jpeg", "image/png", "image/webp", "application/pdf",
+] as const;
+export const FLYER_ACCEPT = ".jpg,.jpeg,.png,.webp,.pdf";
+
+/**
+ * Validación del flyer, compartida por el cliente y el server. No va en el
+ * schema de Zod porque el archivo viaja aparte, en el multipart — el resto del
+ * payload sigue siendo JSON.
+ */
+export function validarFlyer(file: { size: number; type: string; name?: string } | null | undefined): string | null {
+  if (!file) return "Subí el flyer del evento.";
+  if (!(FLYER_MIME as readonly string[]).includes(file.type)) {
+    return "El flyer tiene que ser JPG, PNG, WebP o PDF.";
+  }
+  if (file.size > FLYER_MAX_BYTES) {
+    return `El flyer no puede pesar más de ${FLYER_MAX_MB} MB.`;
+  }
+  if (file.size === 0) return "El archivo está vacío. Probá de nuevo.";
+  return null;
+}
+
 const contarPalabras = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
 
 /** Tope de speakers por propuesta (un panel grande no pasa de esto). */
@@ -74,6 +126,28 @@ const urlTolerante = (msg: string) =>
     if (!s) return "";
     return /^https?:\/\//i.test(s) ? s : `https://${s}`;
   }, z.union([z.literal(""), z.string().url(msg)]));
+
+/**
+ * Link de Luma. Obligatorio: el evento tiene que quedar registrado desde la
+ * postulación misma, no pedirse después. Se exige el dominio de Luma porque
+ * un "link de Luma" que apunta a otra cosa no sirve para armar el calendario.
+ */
+const LUMA_HOST = /(^|\.)(lu\.ma|luma\.com)$/i;
+
+const urlLuma = z.preprocess(
+  (v) => {
+    const s = String(v ?? "").trim();
+    if (!s) return "";
+    return /^https?:\/\//i.test(s) ? s : `https://${s}`;
+  },
+  z
+    .string()
+    .min(1, "Pegá el link de tu evento en Luma.")
+    .url("Revisá el link (ej: lu.ma/tu-evento).")
+    .refine((u) => {
+      try { return LUMA_HOST.test(new URL(u).hostname); } catch { return false; }
+    }, "Tiene que ser un link de Luma (ej: lu.ma/tu-evento)."),
+);
 
 /**
  * Speaker propuesto. Cada uno se convierte en una fila de la base 🗣️ Speakers,
@@ -123,6 +197,9 @@ export const eventoSchema = z.object({
   // Opcional: no todos los formatos llevan speakers.
   speakers: z.array(speakerSchema).max(MAX_SPEAKERS, `Máximo ${MAX_SPEAKERS} speakers.`).default([]),
   propuestaValor: z.string().min(20, "Contanos la propuesta de valor (mín. 20 caracteres)."),
+  // Difusión. El flyer no está acá: viaja como archivo en el multipart y se
+  // valida con validarFlyer(), en el cliente y en el server.
+  linkLuma: urlLuma,
   ...antiSpam,
 });
 

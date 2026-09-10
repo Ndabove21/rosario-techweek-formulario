@@ -20,6 +20,61 @@ const email = (e: string) => ({ email: e || null });
 const phone = (p: string) => ({ phone_number: p || null });
 const url = (u?: string) => ({ url: u && u.length ? u : null });
 const rel = (ids: string[]) => ({ relation: ids.map((id) => ({ id })) });
+/** Adjunta un archivo ya subido (file_upload) a una propiedad `files`. */
+const archivo = (uploadId: string, nombre: string) => ({
+  files: [{ type: "file_upload", file_upload: { id: uploadId }, name: nombre }],
+});
+
+/**
+ * Versión de la API. Tiene que coincidir con la que manda el SDK (2.3.0 usa
+ * 2022-06-28) para que las dos vías hablen el mismo idioma.
+ */
+const NOTION_VERSION = "2022-06-28";
+
+/** Notion rechaza nombres raros; dejamos algo plano y con extensión. */
+function nombreSeguro(nombre: string): string {
+  const limpio = (nombre || "flyer")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._-]/g, "-")
+    .replace(/-+/g, "-")
+    .slice(-80);
+  return limpio.replace(/^[-.]+/, "") || "flyer";
+}
+
+/**
+ * Sube el flyer a Notion y devuelve el id del upload, listo para adjuntar.
+ *
+ * El SDK instalado (2.3.0) no expone `fileUploads` —llegó en la v4—, así que se
+ * habla con el REST directo. Son dos pasos: reservar el upload y mandar los
+ * bytes. Se llama ANTES de crear la fila: si falla, el organizador reintenta
+ * sin haber perdido la propuesta.
+ */
+export async function subirFlyer(file: File): Promise<string> {
+  const token = process.env.NOTION_TOKEN;
+  if (!token) throw new Error("Falta NOTION_TOKEN.");
+  const auth = { Authorization: `Bearer ${token}`, "Notion-Version": NOTION_VERSION };
+  const nombre = nombreSeguro(file.name);
+
+  const reserva = await fetch("https://api.notion.com/v1/file_uploads", {
+    method: "POST",
+    headers: { ...auth, "Content-Type": "application/json" },
+    body: JSON.stringify({ filename: nombre, content_type: file.type }),
+  });
+  const datos = (await reserva.json()) as { id?: string; upload_url?: string; message?: string };
+  if (!reserva.ok || !datos.id || !datos.upload_url) {
+    throw new Error(`No se pudo reservar la subida del flyer: ${datos.message ?? reserva.status}`);
+  }
+
+  const form = new FormData();
+  form.append("file", file, nombre);
+  const envio = await fetch(datos.upload_url, { method: "POST", headers: auth, body: form });
+  if (!envio.ok) {
+    const err = (await envio.json().catch(() => ({}))) as { message?: string };
+    throw new Error(`No se pudo subir el flyer: ${err.message ?? envio.status}`);
+  }
+  return datos.id;
+}
+
 
 /**
  * Arma el rango ISO para "Fecha y horario" a partir del día elegido y las horas.
@@ -81,7 +136,7 @@ function crearSpeaker(sp: SpeakerInput, eventoId: string, tematicas: readonly st
   });
 }
 
-async function crearEvento(d: EventoInput) {
+async function crearEvento(d: EventoInput, flyer: FlyerSubido | null) {
   // EVENTOS no tiene columna de temáticas: se anexan al final de "Descripción".
   // Los speakers ya NO van acá — cada uno es una fila propia en 🗣️ Speakers.
   // El lugar propio va acá y no en la propiedad "Venue": esa es una relación a
@@ -114,6 +169,9 @@ async function crearEvento(d: EventoInput) {
       "Teléfono proponente": phone(d.whatsapp),
       "Organización proponente": rich(d.organizacion ?? ""),
       "Web / LinkedIn": url(d.webLinkedin || undefined),
+      // Difusión: los dos llegan con la postulación, no se piden después.
+      "Link Luma": url(d.linkLuma),
+      ...(flyer ? { "Flyer / imagen": archivo(flyer.uploadId, flyer.nombre) } : {}),
       // Valores fijos (no se le piden al usuario)
       "Estado curaduría": sel("Recibido"),
       "Vía de ingreso": sel("Propuesta de host"),
@@ -162,10 +220,13 @@ function crearVenue(d: VenueInput) {
   });
 }
 
+/** Flyer ya subido a Notion, listo para adjuntarse a la fila del evento. */
+export type FlyerSubido = { uploadId: string; nombre: string };
+
 /** Escribe la propuesta validada en la base de Notion que corresponda. */
-export async function guardarEnNotion(data: Submission) {
+export async function guardarEnNotion(data: Submission, flyer: FlyerSubido | null = null) {
   switch (data.via) {
-    case "evento": return crearEvento(data);
+    case "evento": return crearEvento(data, flyer);
     case "venue": return crearVenue(data);
   }
 }

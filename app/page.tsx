@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   FORMATOS, PILARES, NECESITA_VENUE, COSTOS, TEMATICAS, DIAS,
   DIAS_VENUE, FRANJAS, MAX_SPEAKERS, submissionSchema,
+  MEDIA_KIT_URL, LIMITES, FLYER_REQUISITOS, FLYER_ACCEPT, FLYER_MAX_MB,
+  validarFlyer,
 } from "@/lib/schemas";
 
 /** Un speaker en el estado del form (todos string: se validan al enviar). */
@@ -15,7 +17,7 @@ type Status = "idle" | "sending" | "ok" | "error";
 type Errors = Record<string, string>;
 
 const CARDS: { via: Via; n: string; titulo: string; desc: string }[] = [
-  { via: "evento", n: "01", titulo: "Sumar evento", desc: "Proponé tu evento —con speakers, temática y propuesta— para el calendario oficial." },
+  { via: "evento", n: "01", titulo: "Sumar evento", desc: "Proponé tu evento completo —speakers, flyer y link de Luma— para que el equipo lo evalúe." },
   { via: "venue", n: "02", titulo: "Ofrecer venue", desc: "Abrí las puertas de tu espacio y recibí un evento de la semana." },
 ];
 
@@ -102,6 +104,40 @@ function Chips({ label, values, options, onToggle, err, req }: {
   );
 }
 
+/** KB para piezas chicas, MB para las grandes: "0.0 MB" no le dice nada a nadie. */
+const pesoLegible = (bytes: number) =>
+  bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+
+/** Subida de un archivo. El input real va oculto: el label es el control. */
+function Archivo({ label, file, on, err, req, accept }: {
+  label: string; file: File | null; on: (f: File | null) => void; err?: string; req?: boolean; accept: string;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  // Limpiar el input al quitar: si no, volver a elegir el MISMO archivo no
+  // dispara onChange y el usuario cree que no se cargó.
+  const quitar = () => { if (ref.current) ref.current.value = ""; on(null); };
+  return (
+    <div>
+      <Lbl req={req}>{label}</Lbl>
+      <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-white/20 px-4 py-3 transition-colors hover:border-white/40">
+        <input ref={ref} type="file" accept={accept} className="sr-only"
+          onChange={(e) => on(e.target.files?.[0] ?? null)} />
+        <span className="shrink-0 rounded-md bg-white/10 px-3 py-1.5 text-[13px] text-neutral-200">Elegir archivo</span>
+        <span className="min-w-0 flex-1 truncate text-[13px] text-neutral-400">
+          {file ? `${file.name} · ${pesoLegible(file.size)}` : "Ningún archivo elegido"}
+        </span>
+      </label>
+      {file && (
+        <button type="button" onClick={quitar}
+          className="mt-2 text-[13px] text-neutral-500 transition-colors hover:text-red-400">
+          Quitar
+        </button>
+      )}
+      <Err msg={err} />
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 export default function Page() {
   const [via, setVia] = useState<Via | null>(null);
@@ -112,12 +148,17 @@ export default function Page() {
   const [tematicas, setTematicas] = useState<string[]>([]);
   const [diasVenue, setDiasVenue] = useState<string[]>([]);
   const [speakers, setSpeakers] = useState<Speaker[]>([]);
+  const [flyer, setFlyer] = useState<File | null>(null);
   const [noSoyBot, setNoSoyBot] = useState(false);
   const [website, setWebsite] = useState(""); // honeypot
 
   const set = (k: string) => (v: string) => {
     setF((s) => ({ ...s, [k]: v }));
     if (errors[k]) setErrors((e) => ({ ...e, [k]: "" }));
+  };
+  const onFlyer = (f: File | null) => {
+    setFlyer(f);
+    if (errors.flyer) setErrors((e) => ({ ...e, flyer: "" }));
   };
   const toggleTema = (t: string) => setTematicas((s) => (s.includes(t) ? s.filter((x) => x !== t) : [...s, t]));
   const toggleDia = (t: string) => setDiasVenue((s) => (s.includes(t) ? s.filter((x) => x !== t) : [...s, t]));
@@ -132,6 +173,7 @@ export default function Page() {
 
   function choose(v: Via) {
     setF({}); setTematicas([]); setDiasVenue([]); setSpeakers([]); setErrors({}); setNoSoyBot(false); setWebsite(""); setServerError("");
+    setFlyer(null);
     setStatus("idle"); setVia(v);
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -143,7 +185,7 @@ export default function Page() {
       lugarPropio: f.lugarPropio ?? "", capacidad: f.capacidad, costo: f.costo,
       dia: f.dia, horaInicio: f.horaInicio, horaFin: f.horaFin, proponente: f.proponente,
       email: f.email, whatsapp: f.whatsapp, organizacion: f.organizacion ?? "", webLinkedin: f.webLinkedin ?? "",
-      tematicas, speakers, propuestaValor: f.propuestaValor };
+      tematicas, speakers, propuestaValor: f.propuestaValor, linkLuma: f.linkLuma };
     return { ...base, espacio: f.espacio, direccion: f.direccion, capacidad: f.capacidad,
       costoDia: f.costoDia ? f.costoDia : undefined, equipamiento: f.equipamiento ?? "", contacto: f.contacto,
       email: f.email, telefono: f.telefono, dias: diasVenue, franja: f.franja,
@@ -154,22 +196,35 @@ export default function Page() {
     e.preventDefault();
     if (!via) return;
     const parsed = submissionSchema.safeParse(buildPayload(via));
-    if (!parsed.success) {
+    // El flyer viaja aparte del JSON, así que se valida aparte y se junta con
+    // los errores de Zod para mostrar todo de una.
+    const errFlyer = via === "evento" ? validarFlyer(flyer) : null;
+    if (!parsed.success || errFlyer) {
       const errs: Errors = {};
-      for (const issue of parsed.error.errors) {
+      for (const issue of parsed.success ? [] : parsed.error.errors) {
         // path.join da "evento" para campos simples y "speakers.0.nombre" para
         // los anidados de la lista de speakers.
         const k = issue.path.join(".");
         if (k && !errs[k]) errs[k] = issue.message;
       }
+      if (errFlyer) errs.flyer = errFlyer;
       setErrors(errs);
       return;
     }
     setStatus("sending"); setServerError("");
     try {
-      const res = await fetch("/api/submit", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(parsed.data),
-      });
+      // Con flyer va multipart (el archivo no entra en JSON); sin flyer, JSON.
+      let res: Response;
+      if (via === "evento" && flyer) {
+        const fd = new FormData();
+        fd.append("payload", JSON.stringify(parsed.data));
+        fd.append("flyer", flyer, flyer.name);
+        res = await fetch("/api/submit", { method: "POST", body: fd });
+      } else {
+        res = await fetch("/api/submit", {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(parsed.data),
+        });
+      }
       const json = await res.json();
       if (!res.ok || !json.ok) throw new Error(json.error || "No pudimos enviar tu propuesta.");
       setStatus("ok");
@@ -197,9 +252,24 @@ export default function Page() {
             <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-neutral-500">— 00 · Es tiempo de acelerar</p>
             <h1 className="mt-5 text-4xl font-semibold tracking-tight md:text-5xl">Sumate a la Rosario Tech Week 2026</h1>
             <p className="mt-4 max-w-lg text-[15px] leading-relaxed text-neutral-400">
-              Del 19 al 24 de octubre. Elegí cómo querés ser parte y contanos tu propuesta —
-              el equipo la revisa en menos de 48 hs hábiles.
+              Del 19 al 24 de octubre. Este formulario es el único canal oficial de alta de
+              eventos: se completa una sola vez, con el flyer y el link de Luma incluidos.
+              El equipo revisa cada propuesta en menos de 48 hs hábiles y solo los eventos
+              aprobados entran al calendario oficial.
             </p>
+            <div className="mt-8 rounded-xl border border-white/12 bg-white/[0.02] p-5">
+              <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-neutral-500">— Fechas límite</p>
+              <ul className="mt-3 grid gap-2 text-[14px] leading-relaxed text-neutral-400">
+                <li>
+                  <span className="font-medium text-neutral-100">{LIMITES.partnership}</span> — último
+                  día para eventos en partnership.
+                </li>
+                <li>
+                  <span className="font-medium text-neutral-100">{LIMITES.congelamiento}</span> — congelamiento
+                  de agenda: después de esa fecha no se incorporan nuevos eventos.
+                </li>
+              </ul>
+            </div>
             <div className="mt-10 grid gap-3">
               {CARDS.map((c) => (
                 // En mobile apila (si no, las 3 columnas estrangulan el texto);
@@ -225,7 +295,8 @@ export default function Page() {
 
             {via === "evento" && (
               <EventoFields f={f} set={set} errors={errors} tematicas={tematicas} toggleTema={toggleTema}
-                speakers={speakers} addSpeaker={addSpeaker} rmSpeaker={rmSpeaker} setSpeaker={setSpeaker} />
+                speakers={speakers} addSpeaker={addSpeaker} rmSpeaker={rmSpeaker} setSpeaker={setSpeaker}
+                flyer={flyer} onFlyer={onFlyer} />
             )}
             {via === "venue" && <VenueFields f={f} set={set} errors={errors} dias={diasVenue} toggleDia={toggleDia} />}
 
@@ -240,6 +311,11 @@ export default function Page() {
               <span className="text-sm text-neutral-400">No soy un bot y la información es real.</span>
             </label>
             <Err msg={errors.noSoyBot} />
+
+            <p className="mt-6 rounded-lg border border-white/12 bg-white/[0.02] p-4 text-[13px] leading-relaxed text-neutral-400">
+              Enviar el formulario no implica aprobación. El equipo de Rosario Tech Week revisa
+              cada propuesta y solo los eventos aprobados se publican en el calendario oficial.
+            </p>
 
             {status === "error" && (
               <div className="mt-6 rounded-lg border border-red-500/30 bg-red-500/5 p-4 text-sm text-red-300">
@@ -269,8 +345,12 @@ function Success() {
       <div className="mx-auto flex size-12 items-center justify-center rounded-full border border-white/20 text-xl">✓</div>
       <h1 className="mt-6 text-3xl font-semibold tracking-tight">¡Gracias!</h1>
       <p className="mx-auto mt-4 max-w-md text-[15px] leading-relaxed text-neutral-400">
-        Recibimos tu propuesta. El equipo la revisa en menos de 48 hs hábiles y te escribimos
-        al email que dejaste.
+        Recibimos tu propuesta con el flyer y el Luma. El equipo la revisa en menos de 48 hs
+        hábiles y te escribimos al email que dejaste.
+      </p>
+      <p className="mx-auto mt-4 max-w-md text-[13px] leading-relaxed text-neutral-500">
+        Recibirla no implica aprobación: solo los eventos aprobados se incorporan al calendario
+        oficial de Rosario Tech Week 2026.
       </p>
     </div>
   );
@@ -328,10 +408,11 @@ function SpeakersBlock({ speakers, add, rm, set, errors }: {
   );
 }
 
-function EventoFields({ f, set, errors, tematicas, toggleTema, speakers, addSpeaker, rmSpeaker, setSpeaker }: FieldsProps & {
+function EventoFields({ f, set, errors, tematicas, toggleTema, speakers, addSpeaker, rmSpeaker, setSpeaker, flyer, onFlyer }: FieldsProps & {
   tematicas: string[]; toggleTema: (v: string) => void;
   speakers: Speaker[]; addSpeaker: () => void; rmSpeaker: (i: number) => void;
   setSpeaker: (i: number, k: keyof Speaker) => (v: string) => void;
+  flyer: File | null; onFlyer: (f: File | null) => void;
 }) {
   return (
     <>
@@ -381,7 +462,45 @@ function EventoFields({ f, set, errors, tematicas, toggleTema, speakers, addSpea
       </div>
 
       <div className="my-10 h-px bg-white/10" />
-      <Eyebrow n="04">Quién propone</Eyebrow>
+      <Eyebrow n="04">Difusión</Eyebrow>
+      <div className="grid gap-5">
+        {/* El Luma lo crea el organizador. El equipo no arma uno por evento. */}
+        <div className="rounded-xl border border-white/12 bg-white/[0.02] p-4">
+          <p className="text-[13px] leading-relaxed text-neutral-400">
+            <span className="text-neutral-100">Creá el evento desde tu propia cuenta de Luma.</span>{" "}
+            Así los inscriptos y los datos de asistentes quedan bajo tu gestión y no dependés de
+            nadie para manejarlos. Después pegá el link acá abajo. Si te trabás, avisanos — es
+            soporte excepcional, no parte del proceso.
+          </p>
+        </div>
+        <Text label="Link de Luma" val={f.linkLuma} on={set("linkLuma")} err={errors.linkLuma} req
+          type="url" ph="lu.ma/tu-evento" />
+
+        {/* Media kit ANTES del flyer: se consulta para diseñar la pieza. */}
+        <div className="rounded-xl border border-white/12 bg-white/[0.02] p-4">
+          <p className="text-[13px] leading-relaxed text-neutral-400">
+            Antes de diseñar la pieza, consultá el{" "}
+            <a href={MEDIA_KIT_URL} target="_blank" rel="noopener noreferrer"
+              className="text-neutral-100 underline underline-offset-4 transition-colors hover:text-white">
+              Media Kit de Rosario Tech Week 2026 →
+            </a>
+          </p>
+          <p className="mt-4 text-[13px] font-medium text-neutral-300">El flyer tiene que incluir sí o sí:</p>
+          <ul className="mt-2 grid gap-1.5">
+            {FLYER_REQUISITOS.map((r) => (
+              <li key={r} className="flex gap-2 text-[13px] text-neutral-400">
+                <span className="text-neutral-600">—</span>
+                {r}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <Archivo label={`Flyer del evento (JPG, PNG, WebP o PDF · hasta ${FLYER_MAX_MB} MB)`}
+          file={flyer} on={onFlyer} err={errors.flyer} req accept={FLYER_ACCEPT} />
+      </div>
+
+      <div className="my-10 h-px bg-white/10" />
+      <Eyebrow n="05">Quién propone</Eyebrow>
       <div className="grid gap-5">
         <div className="grid gap-5 sm:grid-cols-2">
           <Text label="Nombre del proponente" val={f.proponente} on={set("proponente")} err={errors.proponente} req />
