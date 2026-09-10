@@ -5,7 +5,7 @@ import {
   FORMATOS, PILARES, NECESITA_VENUE, COSTOS, TEMATICAS, DIAS,
   DIAS_VENUE, FRANJAS, MAX_SPEAKERS, submissionSchema,
   MEDIA_KIT_URL, LIMITES, FLYER_REQUISITOS, FLYER_ACCEPT, FLYER_MAX_MB,
-  validarFlyer,
+  PLATAFORMAS_TEXTO, validarFlyer,
 } from "@/lib/schemas";
 
 /** Un speaker en el estado del form (todos string: se validan al enviar). */
@@ -17,7 +17,7 @@ type Status = "idle" | "sending" | "ok" | "error";
 type Errors = Record<string, string>;
 
 const CARDS: { via: Via; n: string; titulo: string; desc: string }[] = [
-  { via: "evento", n: "01", titulo: "Sumar evento", desc: "Proponé tu evento completo —speakers, flyer y link de Luma— para que el equipo lo evalúe." },
+  { via: "evento", n: "01", titulo: "Sumar evento", desc: "Proponé tu evento completo —speakers, flyer y link de inscripción— para que el equipo lo evalúe." },
   { via: "venue", n: "02", titulo: "Ofrecer venue", desc: "Abrí las puertas de tu espacio y recibí un evento de la semana." },
 ];
 
@@ -253,7 +253,7 @@ export default function Page() {
             <h1 className="mt-5 text-4xl font-semibold tracking-tight md:text-5xl">Sumate a la Rosario Tech Week 2026</h1>
             <p className="mt-4 max-w-lg text-[15px] leading-relaxed text-neutral-400">
               Del 19 al 24 de octubre. Este formulario es el único canal oficial de alta de
-              eventos: se completa una sola vez, con el flyer y el link de Luma incluidos.
+              eventos: se completa una sola vez, con el flyer y el link de inscripción incluidos.
               El equipo revisa cada propuesta en menos de 48 hs hábiles y solo los eventos
               aprobados entran al calendario oficial.
             </p>
@@ -345,7 +345,7 @@ function Success() {
       <div className="mx-auto flex size-12 items-center justify-center rounded-full border border-white/20 text-xl">✓</div>
       <h1 className="mt-6 text-3xl font-semibold tracking-tight">¡Gracias!</h1>
       <p className="mx-auto mt-4 max-w-md text-[15px] leading-relaxed text-neutral-400">
-        Recibimos tu propuesta con el flyer y el Luma. El equipo la revisa en menos de 48 hs
+        Recibimos tu propuesta con el flyer y el link de inscripción. El equipo la revisa en menos de 48 hs
         hábiles y te escribimos al email que dejaste.
       </p>
       <p className="mx-auto mt-4 max-w-md text-[13px] leading-relaxed text-neutral-500">
@@ -464,17 +464,19 @@ function EventoFields({ f, set, errors, tematicas, toggleTema, speakers, addSpea
       <div className="my-10 h-px bg-white/10" />
       <Eyebrow n="04">Difusión</Eyebrow>
       <div className="grid gap-5">
-        {/* El Luma lo crea el organizador. El equipo no arma uno por evento. */}
+        {/* La inscripción la crea el organizador. El equipo no arma una por evento. */}
         <div className="rounded-xl border border-white/12 bg-white/[0.02] p-4">
           <p className="text-[13px] leading-relaxed text-neutral-400">
-            <span className="text-neutral-100">Creá el evento desde tu propia cuenta de Luma.</span>{" "}
+            <span className="text-neutral-100">
+              Creá el evento desde tu propia cuenta de {PLATAFORMAS_TEXTO}.
+            </span>{" "}
             Así los inscriptos y los datos de asistentes quedan bajo tu gestión y no dependés de
             nadie para manejarlos. Después pegá el link acá abajo. Si te trabás, avisanos — es
             soporte excepcional, no parte del proceso.
           </p>
         </div>
-        <Text label="Link de Luma" val={f.linkLuma} on={set("linkLuma")} err={errors.linkLuma} req
-          type="url" ph="lu.ma/tu-evento" />
+        <Text label={`Link de inscripción (${PLATAFORMAS_TEXTO})`} val={f.linkLuma} on={set("linkLuma")}
+          err={errors.linkLuma} req type="url" ph="lu.ma/tu-evento o eventbrite.com/e/tu-evento" />
 
         {/* Media kit ANTES del flyer: se consulta para diseñar la pieza. */}
         <div className="rounded-xl border border-white/12 bg-white/[0.02] p-4">

@@ -128,13 +128,26 @@ const urlTolerante = (msg: string) =>
   }, z.union([z.literal(""), z.string().url(msg)]));
 
 /**
- * Link de Luma. Obligatorio: el evento tiene que quedar registrado desde la
- * postulación misma, no pedirse después. Se exige el dominio de Luma porque
- * un "link de Luma" que apunta a otra cosa no sirve para armar el calendario.
+ * Plataformas de inscripción aceptadas. Se restringe el dominio a propósito: un
+ * link cualquiera (un Drive, un Instagram) no sirve para armar el calendario ni
+ * para saber cuánta gente se anotó. Para sumar otra plataforma, agregá el patrón
+ * acá y nombrala en PLATAFORMAS_TEXTO.
  */
-const LUMA_HOST = /(^|\.)(lu\.ma|luma\.com)$/i;
+const PLATAFORMAS_INSCRIPCION = [
+  /(^|\.)lu\.ma$/i,
+  /(^|\.)luma\.com$/i,
+  // eventbrite.com, .com.ar, .co.uk, .es… todas las variantes por país.
+  /(^|\.)eventbrite\.[a-z]{2,3}(\.[a-z]{2})?$/i,
+];
 
-const urlLuma = z.preprocess(
+/** Cómo se nombran las plataformas en las etiquetas y los mensajes de error. */
+export const PLATAFORMAS_TEXTO = "Luma o Eventbrite";
+
+/**
+ * Link de inscripción. Obligatorio: el evento tiene que quedar registrado desde
+ * la postulación misma, no pedirse después.
+ */
+const urlInscripcion = z.preprocess(
   (v) => {
     const s = String(v ?? "").trim();
     if (!s) return "";
@@ -142,11 +155,14 @@ const urlLuma = z.preprocess(
   },
   z
     .string()
-    .min(1, "Pegá el link de tu evento en Luma.")
+    .min(1, `Pegá el link de tu evento en ${PLATAFORMAS_TEXTO}.`)
     .url("Revisá el link (ej: lu.ma/tu-evento).")
     .refine((u) => {
-      try { return LUMA_HOST.test(new URL(u).hostname); } catch { return false; }
-    }, "Tiene que ser un link de Luma (ej: lu.ma/tu-evento)."),
+      try {
+        const host = new URL(u).hostname;
+        return PLATAFORMAS_INSCRIPCION.some((re) => re.test(host));
+      } catch { return false; }
+    }, `Tiene que ser un link de ${PLATAFORMAS_TEXTO} (ej: lu.ma/tu-evento o eventbrite.com/e/tu-evento).`),
 );
 
 /**
@@ -199,7 +215,7 @@ export const eventoSchema = z.object({
   propuestaValor: z.string().min(20, "Contanos la propuesta de valor (mín. 20 caracteres)."),
   // Difusión. El flyer no está acá: viaja como archivo en el multipart y se
   // valida con validarFlyer(), en el cliente y en el server.
-  linkLuma: urlLuma,
+  linkLuma: urlInscripcion,
   ...antiSpam,
 });
 
