@@ -5,6 +5,7 @@ en las bases de **Notion** del Hub, desde un backend propio. El token de Notion 
 **solo en el servidor**, nunca en el navegador.
 
 - **Caminos:** Sumar evento · Ofrecer venue · Ser speaker (lógica condicional).
+- **Segundo formulario:** alta en la comunidad del Hub (`/comunidad`). Ver §6.
 - **Stack:** Next.js (App Router) + TypeScript + Tailwind v4 + Zod + `@notionhq/client`.
 - **Identidad:** replicada de `rosariotechweek.com` (dark `#0a0a0a`, patrón "— 01", tagline "Es tiempo de acelerar").
 
@@ -25,7 +26,8 @@ npm run dev                    # http://localhost:3000
 | `NOTION_TOKEN` | Secreto de la integración de Notion. **Solo en `.env.local` / Vercel, nunca en git.** |
 | `NOTION_DB_EVENTOS` | Database ID base Eventos (ya provisto) |
 | `NOTION_DB_ORGANIZACIONES` | Database ID base Organizaciones (ya provisto) |
-| `NOTION_DB_PERSONAS` | Database ID base Personas (ya provisto) |
+| `NOTION_DB_SPEAKERS` | Database ID base Speakers (ya provisto) |
+| `NOTION_DB_COMUNIDAD` | Database ID base 🧑‍🤝‍🧑 Comunidad — la alimenta `/comunidad` |
 | `HEALTH_SECRET` | (opcional) protege `GET /api/health?secret=...` |
 
 ## 3. Dar acceso a la integración de Notion
@@ -35,7 +37,7 @@ npm run dev                    # http://localhost:3000
    **Internal Integration Secret** (empieza con `ntn_` o `secret_`) → pegarlo en `NOTION_TOKEN`.
 2. **Compartir cada base con la integración:** abrí la página de Bases de Datos
    (`https://app.notion.com/p/Bases-de-Datos-3a5f8168129f810f97f4d15093adfe3d`) y en cada base
-   (Eventos, Organizaciones, Personas): `•••` → **Connections** → **Connect to** → "RTW26 Formulario".
+   (Eventos, Host, Speakers, Comunidad): `•••` → **Connections** → **Connect to** → "RTW26 Formulario".
    *(Compartir la página madre suele heredar; verificá base por base.)*
 3. **Verificar que todo está conectado** antes de producción:
    ```bash
@@ -113,3 +115,58 @@ el form **no escribe en Notion**. Ver secciones **2** y **3**.
 - `NOTION_TOKEN` solo en el server (`app/api/*`, `lib/notion.ts`). No aparece en el bundle del cliente.
 - Validación + sanitización con **Zod** en el servidor antes de escribir.
 - **Honeypot** (`website`) + **rate limit** por IP + whitelist de opciones de `select`.
+
+---
+
+## 6. Segundo formulario — "Sumate a la Comunidad" (`/comunidad`)
+
+Mismo proyecto, misma app, **otro subdominio**. La Tech Week es el motivo de entrada;
+lo que se construye es la base de personas del **Rosario Innovation Hub**.
+
+| | |
+|---|---|
+| URL pública | `https://comunidad.rosariotechweek.com` |
+| Ruta real | `/comunidad` (también accesible por path en cualquier host) |
+| Endpoint | `POST /api/comunidad` (JSON, sin archivos) |
+| Base de Notion | `🧑‍🤝‍🧑 Comunidad` → `NOTION_DB_COMUNIDAD` |
+| Archivos | `app/comunidad/`, `app/api/comunidad/`, `lib/comunidad-*.ts`, `middleware.ts` |
+
+### Cómo funciona el subdominio
+
+`middleware.ts` mira el `Host` de cada request: si es `comunidad.rosariotechweek.com`,
+reescribe `/` → `/comunidad`. El matcher es **solo la raíz**, así que `/api/*` y los
+assets se sirven igual desde los dos hosts y no hay nada duplicado.
+
+Para que funcione hay que **agregar el dominio al proyecto en Vercel**
+(Settings → Domains → `comunidad.rosariotechweek.com`). Sin eso, la ruta
+`/comunidad` sigue andando por path — sirve para probar antes de tocar el DNS.
+
+### El email es el identificador
+
+Si alguien ya está en la base, el alta **actualiza su fila** en vez de crear una
+segunda (`lib/comunidad-notion.ts`). Dos reglas que valen la pena recordar:
+
+- Un segundo envío **nunca borra** datos: los campos que llegan vacíos se omiten,
+  así que quien completa rápido no pierde los intereses que cargó la primera vez.
+- **Excepción: los consentimientos siempre se pisan**, incluso en `false`. Vale la
+  última voluntad manifestada — no marcar la casilla comercial es un opt-out.
+- `Origen` y `Estado` se sellan en el alta y no se vuelven a tocar: si el equipo
+  movió a alguien a "Contactado", un segundo envío no lo devuelve a "Nuevo".
+
+### Trazabilidad de canales
+
+El form lee `?ref=` de la URL y lo guarda en `Notas` ("Llegó por: qr-stand").
+Usalo en cada QR y en cada posteo (`?ref=qr-stand`, `?ref=instagram`,
+`?ref=unr`) — es lo único que después permite saber qué canal trajo gente.
+
+### Decisiones de producto
+
+- **Obligatorios: 7.** Nombre, email, perfil, temas, qué busca, qué aporta y el
+  consentimiento. Todo lo demás es opcional y vive plegado en "Contanos un poco más".
+- **Tope de 8 temas**, aplicado en el UI (las opciones restantes se deshabilitan).
+  Quien marca 15 de 22 no está diciendo nada: la segmentación se vuelve ruido.
+- **Los emojis no se guardan en Notion.** Viven en `EMOJI` de `lib/comunidad-schemas.ts`
+  y son solo para render: un `multi_select` con emoji en el nombre es un infierno
+  para filtrar y para exportar.
+- **Consentimiento comercial separado** del de comunicaciones del Hub. Mezclarlos
+  invalidaría los dos (Ley 25.326).

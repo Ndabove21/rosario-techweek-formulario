@@ -7,6 +7,10 @@ import {
   MEDIA_KIT_URL, LIMITES, FLYER_REQUISITOS, FLYER_ACCEPT, FLYER_MAX_MB,
   validarFlyer,
 } from "@/lib/schemas";
+// Los campos (Text, Sel, Chips…) se comparten con el form de comunidad.
+import {
+  inputCls, Eyebrow, Lbl, Err, Text, Area, Sel, Chips,
+} from "@/components/campos";
 
 /** Un speaker en el estado del form (todos string: se validan al enviar). */
 type Speaker = { nombre: string; rol: string; tema: string; linkedin: string };
@@ -20,89 +24,6 @@ const CARDS: { via: Via; n: string; titulo: string; desc: string }[] = [
   { via: "evento", n: "01", titulo: "Sumar evento", desc: "Proponé tu evento completo —speakers, flyer y link de Luma— para que el equipo lo evalúe." },
   { via: "venue", n: "02", titulo: "Ofrecer venue", desc: "Abrí las puertas de tu espacio y recibí un evento de la semana." },
 ];
-
-const inputCls =
-  "w-full rounded-lg border border-white/12 bg-white/[0.03] px-3.5 py-2.5 text-[15px] text-neutral-100 outline-none transition-colors focus:border-white/40 focus:bg-white/[0.05]";
-
-// ── Campos reutilizables ──────────────────────────────────────────────────
-function Eyebrow({ n, children }: { n: string; children: React.ReactNode }) {
-  return (
-    <p className="mb-6 font-mono text-[11px] uppercase tracking-[0.22em] text-neutral-500">
-      — {n} · {children}
-    </p>
-  );
-}
-function Lbl({ children, req }: { children: React.ReactNode; req?: boolean }) {
-  return (
-    <span className="mb-1.5 block text-[13px] font-medium text-neutral-300">
-      {children} {req && <span className="text-neutral-500">*</span>}
-    </span>
-  );
-}
-function Err({ msg }: { msg?: string }) {
-  return msg ? <p className="mt-1.5 text-xs text-red-400">{msg}</p> : null;
-}
-function Text({ label, val, on, err, req, type = "text", ph }: {
-  label: string; val: string; on: (v: string) => void; err?: string; req?: boolean; type?: string; ph?: string;
-}) {
-  return (
-    <label className="block">
-      <Lbl req={req}>{label}</Lbl>
-      <input type={type} value={val ?? ""} onChange={(e) => on(e.target.value)} placeholder={ph}
-        className={inputCls} />
-      <Err msg={err} />
-    </label>
-  );
-}
-function Area({ label, val, on, err, req, ph, rows = 5 }: {
-  label: string; val: string; on: (v: string) => void; err?: string; req?: boolean; ph?: string; rows?: number;
-}) {
-  return (
-    <label className="block">
-      <Lbl req={req}>{label}</Lbl>
-      <textarea value={val ?? ""} onChange={(e) => on(e.target.value)} rows={rows} placeholder={ph}
-        className={`${inputCls} resize-y leading-relaxed`} />
-      <Err msg={err} />
-    </label>
-  );
-}
-function Sel({ label, val, on, options, err, req }: {
-  label: string; val: string; on: (v: string) => void; options: readonly string[]; err?: string; req?: boolean;
-}) {
-  return (
-    <label className="block">
-      <Lbl req={req}>{label}</Lbl>
-      <select value={val ?? ""} onChange={(e) => on(e.target.value)} className={`${inputCls} appearance-none`}>
-        <option value="" disabled>Elegí una opción…</option>
-        {options.map((o) => <option key={o} value={o}>{o}</option>)}
-      </select>
-      <Err msg={err} />
-    </label>
-  );
-}
-function Chips({ label, values, options, onToggle, err, req }: {
-  label: string; values: string[]; options: readonly string[]; onToggle: (v: string) => void; err?: string; req?: boolean;
-}) {
-  return (
-    <div>
-      <Lbl req={req}>{label}</Lbl>
-      <div className="flex flex-wrap gap-2">
-        {options.map((o) => {
-          const active = values.includes(o);
-          return (
-            <button key={o} type="button" onClick={() => onToggle(o)}
-              className={`rounded-full border px-3.5 py-1.5 text-[13px] transition-colors ${
-                active ? "border-white bg-white text-black" : "border-white/15 text-neutral-300 hover:border-white/40"
-              }`}>
-              {o}
-            </button>
-          );
-        })}
-      </div>
-      <Err msg={err} />
-    </div>
-  );
-}
 
 /** KB para piezas chicas, MB para las grandes: "0.0 MB" no le dice nada a nadie. */
 const pesoLegible = (bytes: number) =>

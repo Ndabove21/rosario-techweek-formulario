@@ -8,17 +8,26 @@ export const DB = {
   eventos: process.env.NOTION_DB_EVENTOS ?? "",
   organizaciones: process.env.NOTION_DB_ORGANIZACIONES ?? "",
   speakers: process.env.NOTION_DB_SPEAKERS ?? "",
+  // Base de personas del Hub. La alimenta el form de comunidad (subdominio
+  // comunidad.rosariotechweek.com), no la convocatoria de eventos.
+  //
+  // Tiene un default a propósito: un Database ID no es secreto (los otros tres
+  // ya viven en .env.example, en git) y así el deploy anda sin cargar nada a
+  // mano en Vercel. La env var, si está, gana igual — sirve para apuntar a una
+  // base de prueba sin tocar el código. El secreto es NOTION_TOKEN, y ese no
+  // tiene default.
+  comunidad: process.env.NOTION_DB_COMUNIDAD ?? "3d8f8168129f81a2b09ce469c6a270c9",
 };
 
 // ── Helpers: cada tipo de propiedad de Notion tiene su forma exacta ────────
-const title = (t: string) => ({ title: [{ text: { content: t.slice(0, 2000) } }] });
-const rich = (t: string) => ({ rich_text: [{ text: { content: (t || "").slice(0, 2000) } }] });
-const sel = (name: string) => ({ select: { name } });
-const multi = (names: readonly string[]) => ({ multi_select: names.map((name) => ({ name })) });
+export const title = (t: string) => ({ title: [{ text: { content: t.slice(0, 2000) } }] });
+export const rich = (t: string) => ({ rich_text: [{ text: { content: (t || "").slice(0, 2000) } }] });
+export const sel = (name: string) => ({ select: { name } });
+export const multi = (names: readonly string[]) => ({ multi_select: names.map((name) => ({ name })) });
 const num = (n?: number | null) => ({ number: n ?? null });
-const email = (e: string) => ({ email: e || null });
-const phone = (p: string) => ({ phone_number: p || null });
-const url = (u?: string) => ({ url: u && u.length ? u : null });
+export const email = (e: string) => ({ email: e || null });
+export const phone = (p: string) => ({ phone_number: p || null });
+export const url = (u?: string) => ({ url: u && u.length ? u : null });
 const rel = (ids: string[]) => ({ relation: ids.map((id) => ({ id })) });
 /** Adjunta un archivo ya subido (file_upload) a una propiedad `files`. */
 const archivo = (uploadId: string, nombre: string) => ({
